@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { loginUser } from '../../services/api'; 
-import './Login.css';
+
+import './Login.css'; 
 
 const Login = () => {
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [error, setError] = useState('');
   const navigate = useNavigate();
 
-  // FIX: Check if user is already logged in when page loads
+  // Check if user is already logged in
   useEffect(() => {
     const user = JSON.parse(localStorage.getItem('user'));
     if (user) {
@@ -30,9 +31,11 @@ const Login = () => {
 
     try {
       const response = await loginUser(formData);
-      const { role, userId, walletCredits } = response.data;
+      // FIX: Extract email and username to save for verification
+      const { role, userId, walletCredits, email, username } = response.data;
       
-      localStorage.setItem('user', JSON.stringify({ role, userId, walletCredits }));
+      // FIX: Include email in localStorage
+      localStorage.setItem('user', JSON.stringify({ role, userId, walletCredits, email, username }));
 
       if (role === 'ADMIN') {
         navigate('/admin/dashboard');
@@ -41,17 +44,16 @@ const Login = () => {
       }
     } catch (err) {
       console.error(err);
-      setError('Invalid email or password. Please try again.');
+      setError('Invalid credentials. Please try again.');
     }
   };
 
   return (
     <div className="login-container">
       <div className="login-card">
-        <h2 className="login-title">ProctorX</h2>
-        <p className="login-subtitle">Secure Exam Platform Login</p>
+        <h2 className="login-title">ProctorX Login</h2>
         
-        {error && <div className="error-alert">{error}</div>}
+        {error && <div className="error-message">{error}</div>}
 
         <form onSubmit={handleSubmit}>
           <div className="form-group">
@@ -59,7 +61,7 @@ const Login = () => {
             <input
               type="email"
               name="email"
-              placeholder="e.g., admin@test.com"
+              placeholder="admin@test.com"
               value={formData.email}
               onChange={handleChange}
               required
@@ -71,7 +73,7 @@ const Login = () => {
             <input
               type="password"
               name="password"
-              placeholder="••••••••"
+              placeholder="********"
               value={formData.password}
               onChange={handleChange}
               required
@@ -79,7 +81,7 @@ const Login = () => {
           </div>
           
           <button type="submit" className="login-btn">
-            Sign In
+            Login to Dashboard
           </button>
         </form>
 

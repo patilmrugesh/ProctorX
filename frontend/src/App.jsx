@@ -1,11 +1,12 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/auth/Login';
-import Register from './pages/auth/Register'; // Import Register
+import Register from './pages/auth/Register';
 import AdminDashboard from './pages/admin/AdminDashboard';
 import CreateContest from './pages/admin/CreateContest';
 import ContestQuestions from './pages/admin/ContestQuestions';
 import StudentDashboard from './pages/student/StudentDashboard';
 import ExamArena from './pages/exam/ExamArena';
+import JudgeDashboard from './pages/judge/JudgeDashboard'; // Import Judge Dashboard
 
 function App() {
   return (
@@ -13,20 +14,21 @@ function App() {
       <Routes>
         <Route path="/" element={<Navigate to="/login" />} />
         
-        {/* Auth Routes */}
+        {/* Auth */}
         <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Register />} /> {/* New Route */}
+        <Route path="/register" element={<Register />} />
         
-        {/* Admin Routes */}
+        {/* Admin */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} />
         <Route path="/admin/create-contest" element={<CreateContest />} />
         <Route path="/admin/contest/:contestId/questions" element={<ContestQuestions />} />
         
-        {/* Student Routes */}
+        {/* Student */}
         <Route path="/student/dashboard" element={<StudentDashboard />} />
-        
-        {/* Exam Route */}
         <Route path="/exam/:contestId" element={<ExamArena />} />
+
+        {/* Judge Route (New) */}
+        <Route path="/judge/monitor/:contestId" element={<JudgeDashboard />} />
       </Routes>
     </Router>
   );

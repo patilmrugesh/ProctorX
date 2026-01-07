@@ -1,0 +1,110 @@
+.judge-container {
+    padding: 2rem;
+    background-color: #1a1a1a;
+    min-height: 100vh;
+    color: white;
+}
+
+.judge-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #333;
+}
+
+.live-badge {
+    background-color: #e74c3c;
+    color: white;
+    padding: 5px 12px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: bold;
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.6; }
+    100% { opacity: 1; }
+}
+
+/* The Grid */
+.monitoring-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    gap: 1.5rem;
+}
+
+/* Student Cell */
+.student-card {
+    background: #2d3436;
+    border-radius: 8px;
+    overflow: hidden;
+    position: relative;
+    border: 2px solid transparent;
+    transition: all 0.2s;
+}
+
+.student-card.suspicious {
+    border-color: #e74c3c; /* Red Border */
+    box-shadow: 0 0 15px rgba(231, 76, 60, 0.3);
+}
+
+.student-card.warning {
+    border-color: #f1c40f; /* Yellow Border */
+}
+
+.camera-feed {
+    width: 100%;
+    height: 180px;
+    background-color: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #666;
+    font-size: 0.8rem;
+}
+
+.student-info {
+    padding: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #2d3436;
+}
+
+.violation-count {
+    background: #e74c3c;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+
+/* Context Menu (Right Click) */
+.context-menu {
+    position: absolute;
+    background: white;
+    color: #333;
+    border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+    z-index: 1000;
+    width: 150px;
+    overflow: hidden;
+}
+
+.menu-item {
+    padding: 10px 15px;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.menu-item:hover {
+    background-color: #f1f1f1;
+}
+
+.menu-item.danger {
+    color: #e74c3c;
+}

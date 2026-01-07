@@ -29,10 +29,12 @@ export const uploadContestUsers = (contestId, file) => {
 // Question Features
 export const addDSAQuestion = (contestId, data) => api.post(`/questions/dsa/add?contestId=${contestId}`, data);
 export const addMCQQuestion = (contestId, data) => api.post(`/questions/mcq/add?contestId=${contestId}`, data);
-// --- NEW: Add Test Case ---
 export const addTestCase = (questionId, data) => api.post(`/questions/cases/add?questionId=${questionId}`, data);
 
 // Student Features
 export const joinContest = (token, email) => api.get(`/contests/join/${token}?email=${email}`);
+
+// --- NEW: Judge Features ---
+export const joinJudge = (token) => api.get(`/contests/judge/join/${token}`);
 
 export default api;

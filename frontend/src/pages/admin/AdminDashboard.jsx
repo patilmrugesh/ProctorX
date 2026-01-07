@@ -149,6 +149,11 @@ const AdminDashboard = () => {
                   <span>Student Token:</span>
                   <span className="token-code">{contest.studentToken}</span>
                 </div>
+                {/* --- FIX: Added Judge Token Display Back --- */}
+                <div className="token-row">
+                  <span>Judge Token:</span>
+                  <span className="token-code">{contest.judgeToken}</span>
+                </div>
               </div>
 
               <div className="card-actions">
