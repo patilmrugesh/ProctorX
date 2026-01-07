@@ -1,0 +1,77 @@
+/* Reusing some styles from Login but specific for Register */
+.register-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    background-color: #eef2f6;
+    padding: 20px;
+}
+
+.register-card {
+    background: white;
+    padding: 2.5rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+    width: 100%;
+    max-width: 500px; /* Slightly wider than login */
+}
+
+.register-title {
+    text-align: center;
+    margin-bottom: 0.5rem;
+    color: #1a1a1a;
+    font-size: 1.8rem;
+}
+
+.register-subtitle {
+    text-align: center;
+    color: #666;
+    margin-bottom: 2rem;
+    font-size: 0.95rem;
+}
+
+.role-select-group {
+    display: flex;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.role-option {
+    flex: 1;
+    padding: 10px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    text-align: center;
+    cursor: pointer;
+    font-weight: 600;
+    color: #666;
+    transition: all 0.2s;
+}
+
+.role-option.active {
+    border-color: #2196f3;
+    background-color: #e3f2fd;
+    color: #1976d2;
+}
+
+.form-row-split {
+    display: flex;
+    gap: 1rem;
+}
+
+.form-row-split .form-group {
+    flex: 1;
+}
+
+.register-link {
+    text-align: center;
+    margin-top: 1.5rem;
+    font-size: 0.9rem;
+    color: #666;
+}
+
+.register-link a {
+    color: #2196f3;
+    font-weight: 600;
+}
