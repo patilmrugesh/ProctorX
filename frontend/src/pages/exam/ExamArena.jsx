@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import api from '../../services/api';
+import api, { runCode } from '../../services/api'; // Import runCode
 import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import './ExamArena.css';
@@ -10,11 +10,20 @@ const ExamArena = () => {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user')) || {};
   
+  // Exam State
   const [questions, setQuestions] = useState([]);
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [code, setCode] = useState('// Write your C++ or Python code here...');
+  
+  // Coding State
+  const [code, setCode] = useState('# Write your Python code here...\n\nimport sys\n\n# Read input from stdin\ndata = sys.stdin.read().split()\n\n# Logic here\n');
+  const [language, setLanguage] = useState('PYTHON');
+  const [output, setOutput] = useState(''); 
+  const [verdict, setVerdict] = useState(''); 
+  const [isRunning, setIsRunning] = useState(false);
+  
+  // MCQ State
   const [mcqAnswers, setMcqAnswers] = useState({});
   
   const stompClientRef = useRef(null);
@@ -28,6 +37,7 @@ const ExamArena = () => {
 
     fetchQuestions();
     
+    // --- WebSocket Setup ---
     const socket = new SockJS('http://localhost:8080/ws');
     const client = Stomp.over(socket);
     client.debug = null;
@@ -44,9 +54,8 @@ const ExamArena = () => {
         document.removeEventListener('fullscreenchange', checkFullscreen);
         document.removeEventListener('visibilitychange', handleTabSwitch);
         
-        // FIX: Check connection before disconnecting
+        // --- Offline Alert Logic ---
         if (client && client.connected) {
-            // Send OFFLINE alert before disconnecting
             if (user.userId) {
                 const payload = {
                     type: 'OFFLINE',
@@ -61,10 +70,7 @@ const ExamArena = () => {
                     console.error("Failed to send offline status", e);
                 }
             }
-            // CRITICAL FIX: Do NOT call disconnect() immediately here.
-            // Calling disconnect() kills the socket before the 'OFFLINE' message is sent.
-            // The browser will automatically close the socket when the page unloads.
-            // client.disconnect(); 
+            // Allow browser to flush the message before closing socket naturally
         }
     };
   }, []);
@@ -116,6 +122,43 @@ const ExamArena = () => {
       console.error(err);
     } finally {
         setLoading(false);
+    }
+  };
+
+  // --- Run Code Logic ---
+  const handleRunCode = async () => {
+    const currentQ = questions[currentQIndex];
+    if (!currentQ) return;
+
+    setIsRunning(true);
+    setOutput("Running test cases...");
+    setVerdict("");
+
+    // FIX: Ensure IDs are Numbers, not Strings
+    const payload = {
+        code: code,
+        language: language,
+        questionId: Number(currentQ.questionId), 
+        userId: user.userId ? Number(user.userId) : null,
+        contestId: Number(contestId)
+    };
+
+    try {
+        const res = await runCode(payload);
+        setVerdict(res.data.verdict);
+        setOutput(res.data.output);
+    } catch (err) {
+        console.error("Run Error:", err);
+        setVerdict("Error");
+        
+        // Improve Error Message
+        if (err.response && err.response.status === 400) {
+            setOutput("Bad Request (400): The server rejected the data. Check console.");
+        } else {
+            setOutput("Server Error or Compilation Failed.");
+        }
+    } finally {
+        setIsRunning(false);
     }
   };
 
@@ -174,11 +217,20 @@ const ExamArena = () => {
                 <span className="badge" style={{background: '#fff3cd', color: '#856404'}}>{currentQ.difficulty || 'Easy'}</span>
             </div>
             <h2 className="problem-title">{currentQ.title || currentQ.questionText}</h2>
+            
             {currentQ.qType === 'DSA' ? (
                 <div>
                     <p className="problem-desc">{currentQ.problemStatement}</p>
                     {currentQ.inputFormat && <><h4 style={{marginTop:'20px'}}>Input</h4><p className="problem-desc">{currentQ.inputFormat}</p></>}
                     {currentQ.constraints && <><h4 style={{marginTop:'20px'}}>Constraints</h4><p className="problem-desc">{currentQ.constraints}</p></>}
+                    
+                    {/* Output Console */}
+                    {verdict && (
+                        <div style={{marginTop: '20px', padding: '15px', background: '#f1f1f1', borderRadius: '8px', borderLeft: `5px solid ${verdict === 'AC' ? 'green' : 'red'}`}}>
+                            <h4>Verdict: <span style={{color: verdict === 'AC' ? 'green' : 'red'}}>{verdict}</span></h4>
+                            <pre style={{whiteSpace: 'pre-wrap', fontSize: '0.9rem'}}>{output}</pre>
+                        </div>
+                    )}
                 </div>
             ) : (
                 <div className="mcq-options">
@@ -199,7 +251,22 @@ const ExamArena = () => {
             <div className="answer-area">
                 <textarea className="code-editor" value={code} onChange={(e) => setCode(e.target.value)} />
                 <div className="editor-footer">
-                    <button className="run-btn">Run Code</button>
+                    <select 
+                        value={language} 
+                        onChange={(e) => setLanguage(e.target.value)}
+                        style={{marginRight: 'auto', background: '#333', color: 'white', border: 'none', padding: '5px'}}
+                    >
+                        <option value="PYTHON">Python</option>
+                        <option value="CPP">C++</option>
+                    </select>
+                    <button 
+                        className="run-btn" 
+                        onClick={handleRunCode} 
+                        disabled={isRunning}
+                        style={{background: isRunning ? '#666' : '#2ecc71'}}
+                    >
+                        {isRunning ? 'Running...' : 'Run Code'}
+                    </button>
                 </div>
             </div>
         )}

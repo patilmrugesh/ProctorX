@@ -37,4 +37,8 @@ export const joinContest = (token, email) => api.get(`/contests/join/${token}?em
 // --- NEW: Judge Features ---
 export const joinJudge = (token) => api.get(`/contests/judge/join/${token}`);
 
+
+// Submission Features
+export const runCode = (data) => api.post('/submissions/run', data);
+
 export default api;
