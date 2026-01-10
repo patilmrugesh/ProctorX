@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import api, { runCode } from '../../services/api'; // Import runCode
+import api, { runCode } from '../../services/api';
 import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import './ExamArena.css';
@@ -8,27 +8,32 @@ import './ExamArena.css';
 const ExamArena = () => {
   const { contestId } = useParams();
   const navigate = useNavigate();
+  // Safe user access
   const user = JSON.parse(localStorage.getItem('user')) || {};
   
-  // Exam State
+  // --- Exam State ---
   const [questions, setQuestions] = useState([]);
   const [currentQIndex, setCurrentQIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   
-  // Coding State
+  // --- Coding State ---
   const [code, setCode] = useState('# Write your Python code here...\n\nimport sys\n\n# Read input from stdin\ndata = sys.stdin.read().split()\n\n# Logic here\n');
   const [language, setLanguage] = useState('PYTHON');
   const [output, setOutput] = useState(''); 
   const [verdict, setVerdict] = useState(''); 
   const [isRunning, setIsRunning] = useState(false);
   
-  // MCQ State
+  // --- MCQ State ---
   const [mcqAnswers, setMcqAnswers] = useState({});
   
+  // --- Refs ---
   const stompClientRef = useRef(null);
+  const videoRef = useRef(null);
+  const canvasRef = useRef(null);
 
   useEffect(() => {
+    // 1. Security Check
     if (!user.userId) {
         alert("Please login to take the exam.");
         navigate('/login');
@@ -36,27 +41,37 @@ const ExamArena = () => {
     }
 
     fetchQuestions();
+    startWebcam(); // Request Camera immediately
     
-    // --- WebSocket Setup ---
+    // 2. Connect to WebSocket
     const socket = new SockJS('http://localhost:8080/ws');
     const client = Stomp.over(socket);
-    client.debug = null;
+    client.debug = null; // Hide logs
     
     client.connect({}, () => {
         stompClientRef.current = client;
         sendAlert('ONLINE', 'User joined the exam');
+        
+        // Start sending camera frames every 2 seconds
+        const interval = setInterval(captureAndSendFrame, 2000);
+        
+        // Cleanup interval when component unmounts
+        return () => clearInterval(interval);
+
     }, (error) => console.log("WS Error", error));
 
+    // 3. Add Event Listeners
     document.addEventListener('fullscreenchange', checkFullscreen);
     document.addEventListener('visibilitychange', handleTabSwitch);
 
+    // 4. Cleanup Function
     return () => {
         document.removeEventListener('fullscreenchange', checkFullscreen);
         document.removeEventListener('visibilitychange', handleTabSwitch);
         
-        // --- Offline Alert Logic ---
         if (client && client.connected) {
-            if (user.userId) {
+             // Send OFFLINE signal
+             if (user.userId) {
                 const payload = {
                     type: 'OFFLINE',
                     userId: user.userId,
@@ -66,14 +81,48 @@ const ExamArena = () => {
                 };
                 try {
                     client.send(`/app/contest/${contestId}/alert`, {}, JSON.stringify(payload));
-                } catch (e) {
-                    console.error("Failed to send offline status", e);
-                }
-            }
-            // Allow browser to flush the message before closing socket naturally
+                } catch(e) { console.error(e); }
+             }
+             // Do not strictly disconnect here to allow message flush, 
+             // usually browser handles socket close on navigation.
         }
     };
   }, []);
+
+  // --- Proctoring Logic ---
+
+  const startWebcam = async () => {
+    try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } });
+        if (videoRef.current) {
+            videoRef.current.srcObject = stream;
+        }
+    } catch (err) {
+        console.error("Camera access denied", err);
+        alert("Camera permission is mandatory! Please allow access.");
+    }
+  };
+
+  const captureAndSendFrame = () => {
+    if (!stompClientRef.current || !stompClientRef.current.connected || !videoRef.current || !canvasRef.current) return;
+
+    const ctx = canvasRef.current.getContext('2d');
+    ctx.drawImage(videoRef.current, 0, 0, 320, 240);
+    // Convert to low-quality JPEG to save bandwidth
+    const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.5); 
+
+    const payload = {
+        type: 'CAMERA_FRAME',
+        userId: user.userId,
+        username: user.username,
+        contestId: contestId,
+        image: imageBase64
+    };
+    
+    try {
+        stompClientRef.current.send(`/app/contest/${contestId}/alert`, {}, JSON.stringify(payload));
+    } catch(e) {}
+  };
 
   const sendAlert = (type, message) => {
     if (stompClientRef.current && stompClientRef.current.connected && user.userId) {
@@ -109,10 +158,13 @@ const ExamArena = () => {
     document.documentElement.requestFullscreen().catch((e) => console.log(e));
   };
 
+  // --- Data Logic ---
+
   const fetchQuestions = async () => {
     try {
       const dsaRes = await api.get(`/questions/dsa/contest/${contestId}`);
       const mcqRes = await api.get(`/questions/mcq/contest/${contestId}`);
+      
       const combined = [
         ...(dsaRes.data || []).map(q => ({ ...q, qType: 'DSA' })), 
         ...(mcqRes.data || []).map(q => ({ ...q, qType: 'MCQ', title: "MCQ Question", difficulty: "1 Mark" }))
@@ -125,7 +177,18 @@ const ExamArena = () => {
     }
   };
 
-  // --- Run Code Logic ---
+  // --- Code Execution Logic ---
+
+  const handleLanguageChange = (e) => {
+      const lang = e.target.value;
+      setLanguage(lang);
+      if (lang === 'PYTHON') {
+          setCode('# Python Solution\nimport sys\n\n# Read input\ndata = sys.stdin.read().split()\n# Logic here\n');
+      } else if (lang === 'CPP') {
+          setCode('// C++ Solution\n#include <iostream>\nusing namespace std;\n\nint main() {\n    // code here\n    return 0;\n}');
+      }
+  };
+
   const handleRunCode = async () => {
     const currentQ = questions[currentQIndex];
     if (!currentQ) return;
@@ -134,12 +197,11 @@ const ExamArena = () => {
     setOutput("Running test cases...");
     setVerdict("");
 
-    // FIX: Ensure IDs are Numbers, not Strings
     const payload = {
         code: code,
         language: language,
         questionId: Number(currentQ.questionId), 
-        userId: user.userId ? Number(user.userId) : null,
+        userId: Number(user.userId),
         contestId: Number(contestId)
     };
 
@@ -148,14 +210,11 @@ const ExamArena = () => {
         setVerdict(res.data.verdict);
         setOutput(res.data.output);
     } catch (err) {
-        console.error("Run Error:", err);
         setVerdict("Error");
-        
-        // Improve Error Message
-        if (err.response && err.response.status === 400) {
-            setOutput("Bad Request (400): The server rejected the data. Check console.");
+        if(err.response && err.response.status === 400) {
+             setOutput("Bad Request: Data mismatch.");
         } else {
-            setOutput("Server Error or Compilation Failed.");
+             setOutput("Server Error or Compilation Failed.");
         }
     } finally {
         setIsRunning(false);
@@ -166,6 +225,8 @@ const ExamArena = () => {
     const currentQ = questions[currentQIndex];
     if (currentQ) setMcqAnswers({ ...mcqAnswers, [currentQ.mcqId]: option });
   };
+
+  // --- Render ---
 
   if (loading) return <div className="exam-container">Loading...</div>;
   
@@ -195,6 +256,10 @@ const ExamArena = () => {
 
   return (
     <div className="exam-container">
+      {/* Hidden Video Elements for Logic */}
+      <video ref={videoRef} autoPlay muted style={{display: 'none'}} width="320" height="240"></video>
+      <canvas ref={canvasRef} width="320" height="240" style={{display: 'none'}}></canvas>
+
       <div className="exam-header">
         <h3>ProctorX Exam Arena</h3>
         <div className="timer-box">01:29:59</div>
@@ -202,6 +267,7 @@ const ExamArena = () => {
       </div>
 
       <div className="exam-body">
+        {/* Sidebar */}
         <div className="question-sidebar">
             <div className="sidebar-header">Questions</div>
             <div className="q-nav-grid">
@@ -211,6 +277,7 @@ const ExamArena = () => {
             </div>
         </div>
 
+        {/* Question & Output Area */}
         <div className="problem-area">
             <div style={{display: 'flex', alignItems: 'center', marginBottom: '10px'}}>
                 <span className="badge">{currentQ.qType}</span>
@@ -247,13 +314,14 @@ const ExamArena = () => {
             )}
         </div>
 
+        {/* Editor Area (DSA Only) */}
         {currentQ.qType === 'DSA' && (
             <div className="answer-area">
                 <textarea className="code-editor" value={code} onChange={(e) => setCode(e.target.value)} />
                 <div className="editor-footer">
                     <select 
                         value={language} 
-                        onChange={(e) => setLanguage(e.target.value)}
+                        onChange={handleLanguageChange} 
                         style={{marginRight: 'auto', background: '#333', color: 'white', border: 'none', padding: '5px'}}
                     >
                         <option value="PYTHON">Python</option>

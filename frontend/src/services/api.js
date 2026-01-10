@@ -1,3 +1,4 @@
+
 import axios from 'axios';
 
 const API_URL = 'http://localhost:8080/api';
@@ -34,11 +35,14 @@ export const addTestCase = (questionId, data) => api.post(`/questions/cases/add?
 // Student Features
 export const joinContest = (token, email) => api.get(`/contests/join/${token}?email=${email}`);
 
-// --- NEW: Judge Features ---
+// Judge Features
 export const joinJudge = (token) => api.get(`/contests/judge/join/${token}`);
 
-
-// Submission Features
+// Submission Features - ✅ ENSURE THIS IS EXPORTED (CRITICAL FOR CODE EXECUTION)
 export const runCode = (data) => api.post('/submissions/run', data);
+
+// ✅ ADD THESE OPTIONAL ENDPOINTS (if you want to fetch questions from backend):
+export const getDSAQuestions = (contestId) => api.get(`/questions/dsa/contest/${contestId}`);
+export const getMCQQuestions = (contestId) => api.get(`/questions/mcq/contest/${contestId}`);
 
 export default api;
