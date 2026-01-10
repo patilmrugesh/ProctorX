@@ -17,6 +17,10 @@ const ExamArena = () => {
   const [loading, setLoading] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   
+  // --- Warning/Judge Action State ---
+  const [warningCount, setWarningCount] = useState(0);
+  const [warningMessage, setWarningMessage] = useState('');
+
   // --- Coding State ---
   const [code, setCode] = useState('# Write your Python code here...\n\nimport sys\n\n# Read input from stdin\ndata = sys.stdin.read().split()\n\n# Logic here\n');
   const [language, setLanguage] = useState('PYTHON');
@@ -52,6 +56,12 @@ const ExamArena = () => {
         stompClientRef.current = client;
         sendAlert('ONLINE', 'User joined the exam');
         
+        // --- LISTEN FOR JUDGE ACTIONS (Warnings/Suspensions) ---
+        client.subscribe(`/topic/contest/${contestId}/student/${user.userId}`, (message) => {
+            const payload = JSON.parse(message.body);
+            handleJudgeAction(payload);
+        });
+
         // Start sending camera frames every 2 seconds
         const interval = setInterval(captureAndSendFrame, 2000);
         
@@ -83,11 +93,33 @@ const ExamArena = () => {
                     client.send(`/app/contest/${contestId}/alert`, {}, JSON.stringify(payload));
                 } catch(e) { console.error(e); }
              }
-             // Do not strictly disconnect here to allow message flush, 
-             // usually browser handles socket close on navigation.
+             // Do not strictly disconnect here to allow message flush
         }
     };
   }, []);
+
+  // --- Judge Action Handler ---
+  const handleJudgeAction = (action) => {
+      if (action.type === 'WARN') {
+          setWarningCount(prev => {
+              const newCount = prev + 1;
+              if (newCount >= 3) {
+                  terminateExam("You have exceeded 3 warnings. You are disqualified.");
+              } else {
+                  setWarningMessage(`WARNING ${newCount}/3: Please focus on the screen.`);
+                  setTimeout(() => setWarningMessage(''), 5000); // Hide after 5s
+              }
+              return newCount;
+          });
+      } else if (action.type === 'SUSPEND') {
+          terminateExam("You have been suspended by the Proctor.");
+      }
+  };
+
+  const terminateExam = (reason) => {
+      alert(reason);
+      navigate('/student/dashboard');
+  };
 
   // --- Proctoring Logic ---
 
@@ -260,10 +292,25 @@ const ExamArena = () => {
       <video ref={videoRef} autoPlay muted style={{display: 'none'}} width="320" height="240"></video>
       <canvas ref={canvasRef} width="320" height="240" style={{display: 'none'}}></canvas>
 
+      {/* Warning Overlay */}
+      {warningMessage && (
+          <div style={{
+              position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)', 
+              background: '#e74c3c', color: 'white', padding: '15px 30px', borderRadius: '8px', 
+              boxShadow: '0 4px 15px rgba(0,0,0,0.3)', zIndex: 9999, fontWeight: 'bold', fontSize: '1.2rem'
+          }}>
+              ⚠️ {warningMessage}
+          </div>
+      )}
+
       <div className="exam-header">
         <h3>ProctorX Exam Arena</h3>
-        <div className="timer-box">01:29:59</div>
-        <button className="submit-exam-btn" onClick={() => navigate('/student/dashboard')}>Finish Exam</button>
+        <div style={{display:'flex', gap:'20px', alignItems:'center'}}>
+            <span style={{background: warningCount > 0 ? '#e74c3c' : '#27ae60', padding:'5px 10px', borderRadius:'4px', fontSize:'0.9rem'}}>
+                Warnings: {warningCount}/3
+            </span>
+            <button className="submit-exam-btn" onClick={() => navigate('/student/dashboard')}>Finish</button>
+        </div>
       </div>
 
       <div className="exam-body">
