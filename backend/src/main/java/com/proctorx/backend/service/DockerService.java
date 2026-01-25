@@ -2,12 +2,17 @@ package com.proctorx.backend.service;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 
 import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -16,11 +21,93 @@ public class DockerService {
     @Value("${proctorx.code.temp-dir}")
     private String tempDirBase;
 
-    // CONSTANT: Time taken for Docker to boot up on Windows/WSL (adjust as needed)
-    private static final int DOCKER_STARTUP_BUFFER = 10;
+    // Free Code Execution API (Piston)
+    private static final String PISTON_API_URL = "https://emkc.org/api/v2/piston/execute";
 
-    // --- UPDATED SIGNATURE: Added 'timeLimitSec' ---
-    public String runCode(String code, String language, String inputData, Double timeLimitSec) throws IOException, InterruptedException {
+    public String runCode(String code, String language, String inputData, Double timeLimitSec) {
+
+        // --- LOGIC: CHECK DAEMON STATUS ---
+        // If Docker Daemon is actually running (accepting commands), use it.
+        if (isDockerDaemonRunning()) {
+            System.out.println("✅ Docker Daemon is UP. Running locally...");
+            try {
+                return runLocalDocker(code, language, inputData, timeLimitSec);
+            } catch (Exception e) {
+                System.err.println("❌ Docker crashed during execution. Falling back to API. Error: " + e.getMessage());
+                // Fallthrough to API logic below
+            }
+        } else {
+            System.out.println("⚠️ Docker Daemon is DOWN or Missing. Using Piston API...");
+        }
+
+        // --- FALLBACK: PISTON API ---
+        return runPistonApi(code, language, inputData);
+    }
+
+    // ==========================================
+    // STRATEGY 1: PISTON API (Cloud/Fallback)
+    // ==========================================
+    private String runPistonApi(String code, String language, String input) {
+        try {
+            RestTemplate restTemplate = new RestTemplate();
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+
+            String pistonLang;
+            String version;
+
+            if ("PYTHON".equalsIgnoreCase(language)) {
+                pistonLang = "python";
+                version = "3.10.0";
+            } else if ("CPP".equalsIgnoreCase(language)) {
+                pistonLang = "c++";
+                version = "10.2.0";
+            } else if ("JAVA".equalsIgnoreCase(language)) {
+                pistonLang = "java";
+                version = "15.0.2";
+            } else {
+                return "Error: Unsupported Language";
+            }
+
+            Map<String, Object> payload = new HashMap<>();
+            payload.put("language", pistonLang);
+            payload.put("version", version);
+
+            List<Map<String, String>> files = new ArrayList<>();
+            Map<String, String> file = new HashMap<>();
+            file.put("content", code);
+            files.add(file);
+            payload.put("files", files);
+
+            payload.put("stdin", input != null ? input : "");
+
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
+
+            ResponseEntity<Map> response = restTemplate.postForEntity(PISTON_API_URL, request, Map.class);
+            Map<String, Object> body = response.getBody();
+
+            if (body != null && body.containsKey("run")) {
+                Map<String, Object> run = (Map<String, Object>) body.get("run");
+                String stdout = (String) run.get("stdout");
+                String stderr = (String) run.get("stderr");
+
+                if (stderr != null && !stderr.isEmpty()) {
+                    return "Runtime Error:\n" + stderr;
+                }
+                return stdout != null ? stdout.trim() : "";
+            }
+            return "Error: External API failed to execute code.";
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            return "Server Error: Could not connect to Execution API.";
+        }
+    }
+
+    // ==========================================
+    // STRATEGY 2: LOCAL DOCKER (Localhost)
+    // ==========================================
+    private String runLocalDocker(String code, String language, String inputData, Double timeLimitSec) throws IOException, InterruptedException {
         String folderName = UUID.randomUUID().toString();
         Path folderPath = Paths.get(tempDirBase, folderName);
         Files.createDirectories(folderPath);
@@ -56,14 +143,13 @@ public class DockerService {
                  BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(os))) {
                 writer.write(inputData);
                 writer.flush();
+            } catch (IOException e) {
+                // Ignore broken pipe if process finished early
             }
         }
 
-        // --- DYNAMIC TIMEOUT LOGIC ---
-        // If question limit is 2.0s, we wait 12.0s total to account for Docker startup.
-        // In a real Linux server deployment, DOCKER_STARTUP_BUFFER can be reduced to 0 or 1.
-        long totalWaitTime = (long) Math.ceil(timeLimitSec + DOCKER_STARTUP_BUFFER);
-
+        // Add 5s overhead buffer for Docker startup
+        long totalWaitTime = (long) Math.ceil(timeLimitSec + 5);
         boolean finished = process.waitFor(totalWaitTime, TimeUnit.SECONDS);
 
         if (!finished) {
@@ -80,8 +166,22 @@ public class DockerService {
         }
 
         try { deleteDirectory(folderPath.toFile()); } catch (Exception e) {}
-
         return output.toString().trim();
+    }
+
+    // ==========================================
+    // CHECKER: IS DOCKER DAEMON RUNNING?
+    // ==========================================
+    private boolean isDockerDaemonRunning() {
+        try {
+            // 'docker info' actually talks to the daemon.
+            // 'docker -v' only checks if CLI is installed.
+            Process process = new ProcessBuilder("docker", "info").start();
+            boolean finished = process.waitFor(2, TimeUnit.SECONDS);
+            return finished && process.exitValue() == 0;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private void deleteDirectory(File directory) {

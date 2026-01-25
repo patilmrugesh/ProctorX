@@ -1,5 +1,6 @@
 package com.proctorx.backend.controller;
 
+import com.proctorx.backend.dto.SubmitExamRequest;
 import com.proctorx.backend.entity.Contest;
 import com.proctorx.backend.service.ContestService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,17 +15,12 @@ import java.util.List;
 @CrossOrigin(origins = "*")
 public class ContestController {
 
-    @Autowired
-    private ContestService contestService;
+    @Autowired private ContestService contestService;
 
     @PostMapping("/create")
     public ResponseEntity<?> createContest(@RequestParam Long adminId, @RequestBody Contest contest) {
-        try {
-            Contest newContest = contestService.createContest(adminId, contest);
-            return ResponseEntity.ok(newContest);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        try { return ResponseEntity.ok(contestService.createContest(adminId, contest)); }
+        catch (RuntimeException e) { return ResponseEntity.badRequest().body(e.getMessage()); }
     }
 
     @GetMapping("/admin/{adminId}")
@@ -35,7 +31,7 @@ public class ContestController {
     @DeleteMapping("/{contestId}")
     public ResponseEntity<?> deleteContest(@PathVariable Long contestId) {
         contestService.deleteContest(contestId);
-        return ResponseEntity.ok("Contest deleted successfully");
+        return ResponseEntity.ok("Deleted");
     }
 
     @PutMapping("/{contestId}/status")
@@ -45,31 +41,32 @@ public class ContestController {
 
     @PostMapping("/{contestId}/upload-users")
     public ResponseEntity<?> uploadUsers(@PathVariable Long contestId, @RequestParam("file") MultipartFile file) {
-        try {
-            return ResponseEntity.ok(contestService.uploadAllowedEmails(contestId, file));
-        } catch (Exception e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        try { return ResponseEntity.ok(contestService.uploadAllowedEmails(contestId, file)); }
+        catch (Exception e) { return ResponseEntity.badRequest().body(e.getMessage()); }
     }
 
     @GetMapping("/join/{token}")
     public ResponseEntity<?> joinContest(@PathVariable String token, @RequestParam String email) {
-        try {
-            Contest contest = contestService.joinContest(token, email);
-            return ResponseEntity.ok(contest);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        try { return ResponseEntity.ok(contestService.joinContest(token, email)); }
+        catch (RuntimeException e) { return ResponseEntity.badRequest().body(e.getMessage()); }
     }
 
-    // --- THIS WAS LIKELY MISSING ---
     @GetMapping("/judge/join/{token}")
     public ResponseEntity<?> joinJudge(@PathVariable String token) {
-        try {
-            Contest contest = contestService.joinContestAsJudge(token);
-            return ResponseEntity.ok(contest);
-        } catch (RuntimeException e) {
-            return ResponseEntity.badRequest().body(e.getMessage());
-        }
+        try { return ResponseEntity.ok(contestService.joinContestAsJudge(token)); }
+        catch (RuntimeException e) { return ResponseEntity.badRequest().body(e.getMessage()); }
+    }
+
+    // --- NEW: Submit Exam ---
+    @PostMapping("/submit")
+    public ResponseEntity<?> submitExam(@RequestBody SubmitExamRequest request) {
+        try { return ResponseEntity.ok(contestService.submitExam(request)); }
+        catch (Exception e) { return ResponseEntity.badRequest().body(e.getMessage()); }
+    }
+
+    // --- NEW: Leaderboard ---
+    @GetMapping("/{contestId}/leaderboard")
+    public ResponseEntity<?> getLeaderboard(@PathVariable Long contestId) {
+        return ResponseEntity.ok(contestService.getLeaderboard(contestId));
     }
 }
