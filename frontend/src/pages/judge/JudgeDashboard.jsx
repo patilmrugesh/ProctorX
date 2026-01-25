@@ -50,6 +50,11 @@ const JudgeDashboard = () => {
   }, [contestId]);
 
   const handleIncomingEvent = (event) => {
+
+    if (event.type === 'CAMERA_FRAME') {
+        console.log("📷 Received frame from:", event.username, "Image length:", event.image?.length);
+    }
+    
     setStudents((prev) => {
         // 1. Handle User Leaving (OFFLINE)
         if (event.type === 'OFFLINE') {

@@ -4,13 +4,14 @@ import { getAdminContests, deleteContest, updateContestStatus, uploadContestUser
 import './AdminDashboard.css';
 
 const AdminDashboard = () => {
-  const [contests, setContests] = useState([]);
+  // Initialize as empty array to prevent map errors
+  const [contests, setContests] = useState([]); 
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const fileInputRef = useRef(null); 
   const [selectedContestId, setSelectedContestId] = useState(null);
   
-  const user = JSON.parse(localStorage.getItem('user'));
+  const user = JSON.parse(localStorage.getItem('user')) || {};
 
   useEffect(() => {
     fetchContests();
@@ -20,13 +21,22 @@ const AdminDashboard = () => {
     if (user?.userId) {
       getAdminContests(user.userId)
         .then((res) => {
-          setContests(res.data);
+          // SAFETY CHECK: Ensure response data is actually an array
+          if (Array.isArray(res.data)) {
+            setContests(res.data);
+          } else {
+            console.error("API returned non-array data:", res.data);
+            setContests([]); 
+          }
           setLoading(false);
         })
         .catch((err) => {
           console.error("Failed to fetch contests", err);
+          setContests([]); // Fallback to empty array on error
           setLoading(false);
         });
+    } else {
+        setLoading(false);
     }
   };
 
@@ -36,12 +46,12 @@ const AdminDashboard = () => {
   };
 
   const handleDelete = async (contestId) => {
-    if (confirm("Are you sure you want to delete this contest?")) {
+    if (window.confirm("Are you sure you want to delete this contest?")) {
         try {
             await deleteContest(contestId);
             fetchContests(); 
         } catch (err) {
-            alert("Failed to delete contest");
+            alert("Failed to delete contest: " + (err.response?.data?.message || err.message));
         }
     }
   };
@@ -74,6 +84,12 @@ const AdminDashboard = () => {
         e.target.value = null;
         setSelectedContestId(null);
     }
+  };
+
+  const copyToClipboard = (text, label) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    alert(`${label} copied to clipboard!`);
   };
 
   if (loading) return <div className="dashboard-container">Loading...</div>;
@@ -116,7 +132,8 @@ const AdminDashboard = () => {
       />
 
       <div className="contest-grid">
-        {contests.length === 0 ? (
+        {/* SAFETY CHECK: Check if array exists and has length */}
+        {!Array.isArray(contests) || contests.length === 0 ? (
           <div className="empty-state">
             <h3>No contests found</h3>
             <p>Create your first contest to get started!</p>
@@ -145,14 +162,23 @@ const AdminDashboard = () => {
               </div>
 
               <div className="token-box">
-                <div className="token-row">
+                <div 
+                    className="token-row" 
+                    title="Click to copy"
+                    style={{cursor: 'pointer'}}
+                    onClick={() => copyToClipboard(contest.studentToken, "Student Token")}
+                >
                   <span>Student Token:</span>
                   <span className="token-code">{contest.studentToken}</span>
                 </div>
-                {/* --- FIX: Added Judge Token Display Back --- */}
-                <div className="token-row">
+                <div 
+                    className="token-row"
+                    title="Click to copy"
+                    style={{cursor: 'pointer'}}
+                    onClick={() => copyToClipboard(contest.judgeToken, "Judge Token")}
+                >
                   <span>Judge Token:</span>
-                  <span className="token-code">{contest.judgeToken}</span>
+                  <span className="token-code">{contest.judgeToken || "N/A"}</span>
                 </div>
               </div>
 
@@ -163,12 +189,21 @@ const AdminDashboard = () => {
                 >
                   Questions
                 </button>
+                
+                <button 
+                  className="action-btn"
+                  style={{color: '#27ae60', borderColor: '#27ae60'}}
+                  onClick={() => navigate(`/admin/contest/${contest.contestId}/leaderboard`)}
+                >
+                  Results
+                </button>
+
                 <button 
                     className="action-btn" 
                     title="Upload Allowed Emails (CSV)"
                     onClick={() => handleUploadClick(contest.contestId)}
                 >
-                  Upload Users
+                  Users
                 </button>
                 <button 
                     className="action-btn" 

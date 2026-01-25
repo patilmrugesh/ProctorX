@@ -1,110 +1,250 @@
 .judge-container {
-    padding: 2rem;
-    background-color: #1a1a1a;
     min-height: 100vh;
-    color: white;
+    background: #f6f8fa;
+    padding: 2rem;
 }
 
+/* Header */
 .judge-header {
+    background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+    color: white;
+    padding: 1.5rem 2rem;
+    border-radius: 12px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     margin-bottom: 2rem;
-    padding-bottom: 1rem;
-    border-bottom: 1px solid #333;
+    box-shadow: 0 4px 12px rgba(30, 60, 114, 0.2);
+}
+
+.judge-header h2 {
+    font-size: 1.75rem;
+    font-weight: 600;
+    margin: 0;
 }
 
 .live-badge {
-    background-color: #e74c3c;
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
     color: white;
-    padding: 5px 12px;
-    border-radius: 4px;
-    font-size: 0.8rem;
-    font-weight: bold;
+    padding: 8px 16px;
+    border-radius: 20px;
+    font-weight: 600;
+    font-size: 0.9rem;
     animation: pulse 2s infinite;
+    box-shadow: 0 2px 8px rgba(220, 53, 69, 0.4);
 }
 
 @keyframes pulse {
-    0% { opacity: 1; }
-    50% { opacity: 0.6; }
-    100% { opacity: 1; }
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.7;
+    }
 }
 
-/* The Grid */
+/* Monitoring Grid */
 .monitoring-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
     gap: 1.5rem;
 }
 
-/* Student Cell */
+/* Student Card */
 .student-card {
-    background: #2d3436;
-    border-radius: 8px;
+    background: white;
+    border-radius: 12px;
     overflow: hidden;
-    position: relative;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    transition: all 0.3s ease;
     border: 2px solid transparent;
-    transition: all 0.2s;
+}
+
+.student-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+
+.student-card.clean {
+    border-color: #28a745;
 }
 
 .student-card.suspicious {
-    border-color: #e74c3c; /* Red Border */
-    box-shadow: 0 0 15px rgba(231, 76, 60, 0.3);
+    border-color: #ffc107;
+    animation: warning-pulse 1.5s infinite;
 }
 
-.student-card.warning {
-    border-color: #f1c40f; /* Yellow Border */
+@keyframes warning-pulse {
+    0%, 100% {
+        box-shadow: 0 4px 12px rgba(255, 193, 7, 0.3);
+    }
+    50% {
+        box-shadow: 0 4px 20px rgba(255, 193, 7, 0.6);
+    }
 }
 
+/* Camera Feed */
 .camera-feed {
     width: 100%;
-    height: 180px;
-    background-color: #000;
+    height: 240px;
+    background: #1e1e1e;
     display: flex;
+    align-items: center;
     justify-content: center;
-    align-items: center;
-    color: #666;
-    font-size: 0.8rem;
-}
-
-.student-info {
-    padding: 10px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    background: #2d3436;
-}
-
-.violation-count {
-    background: #e74c3c;
-    padding: 2px 6px;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: bold;
-}
-
-/* Context Menu (Right Click) */
-.context-menu {
-    position: absolute;
-    background: white;
-    color: #333;
-    border-radius: 4px;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.3);
-    z-index: 1000;
-    width: 150px;
+    position: relative;
     overflow: hidden;
 }
 
-.menu-item {
-    padding: 10px 15px;
-    cursor: pointer;
+.camera-feed img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.camera-feed span {
+    color: #666;
     font-size: 0.9rem;
+    text-align: center;
+}
+
+/* Student Info */
+.student-info {
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #f6f8fa;
+}
+
+.student-info span:first-child {
+    font-weight: 600;
+    color: #24292e;
+    font-size: 1rem;
+}
+
+.violation-count {
+    background: #dc3545;
+    color: white;
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
+
+/* Context Menu */
+.context-menu {
+    position: fixed;
+    background: white;
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    z-index: 1000;
+    min-width: 200px;
+    border: 1px solid #e1e4e8;
+    overflow: hidden;
+    animation: menuSlideIn 0.15s ease-out;
+}
+
+@keyframes menuSlideIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+.menu-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    transition: background-color 0.15s;
+    font-size: 0.95rem;
+    font-weight: 500;
+    color: #24292e;
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .menu-item:hover {
-    background-color: #f1f1f1;
+    background-color: #f6f8fa;
 }
 
 .menu-item.danger {
-    color: #e74c3c;
+    color: #dc3545;
+}
+
+.menu-item.danger:hover {
+    background-color: #fff5f5;
+}
+
+/* Empty State */
+.monitoring-grid > div[style*="gridColumn"] {
+    background: white;
+    padding: 3rem;
+    border-radius: 12px;
+    border: 2px dashed #d1d5da;
+    color: #586069;
+}
+
+/* Status Indicators */
+.student-card::before {
+    content: '';
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    z-index: 10;
+    border: 2px solid white;
+}
+
+.student-card.clean::before {
+    background: #28a745;
+    box-shadow: 0 0 8px rgba(40, 167, 69, 0.6);
+}
+
+.student-card.suspicious::before {
+    background: #ffc107;
+    box-shadow: 0 0 8px rgba(255, 193, 7, 0.6);
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0%, 100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.3;
+    }
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    .monitoring-grid {
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .judge-container {
+        padding: 1rem;
+    }
+
+    .judge-header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: flex-start;
+    }
+
+    .monitoring-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .camera-feed {
+        height: 200px;
+    }
 }

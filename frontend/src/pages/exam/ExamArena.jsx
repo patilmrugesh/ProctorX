@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import api, { runCode } from '../../services/api';
+import api, { runCode, submitExam } from '../../services/api'; // 1. Added submitExam import
 import SockJS from 'sockjs-client';
 import Stomp from 'stompjs';
 import './ExamArena.css';
@@ -45,43 +45,52 @@ const ExamArena = () => {
     }
 
     fetchQuestions();
-    startWebcam(); // Request Camera immediately
     
-    // 2. Connect to WebSocket
-    const socket = new SockJS('http://localhost:8080/ws');
-    const client = Stomp.over(socket);
-    client.debug = null; // Hide logs
-    
-    client.connect({}, () => {
-        stompClientRef.current = client;
-        sendAlert('ONLINE', 'User joined the exam');
+    // Initialize exam with proper async handling
+    const initExam = async () => {
+        // Start webcam and wait for it
+        await startWebcam();
         
-        // --- LISTEN FOR JUDGE ACTIONS (Warnings/Suspensions) ---
-        client.subscribe(`/topic/contest/${contestId}/student/${user.userId}`, (message) => {
-            const payload = JSON.parse(message.body);
-            handleJudgeAction(payload);
-        });
-
-        // Start sending camera frames every 2 seconds
-        const interval = setInterval(captureAndSendFrame, 2000);
+        // Wait a bit for video stream to stabilize
+        await new Promise(resolve => setTimeout(resolve, 1000));
         
-        // Cleanup interval when component unmounts
-        return () => clearInterval(interval);
+        // Connect to WebSocket
+        const socket = new SockJS('http://localhost:8080/ws');
+        const client = Stomp.over(socket);
+        client.debug = null;
+        
+        client.connect({}, () => {
+            stompClientRef.current = client;
+            sendAlert('ONLINE', 'User joined the exam');
+            
+            // Listen for judge actions
+            client.subscribe(`/topic/contest/${contestId}/student/${user.userId}`, (message) => {
+                const payload = JSON.parse(message.body);
+                handleJudgeAction(payload);
+            });
 
-    }, (error) => console.log("WS Error", error));
+            // Start sending camera frames every 2 seconds
+            const interval = setInterval(captureAndSendFrame, 2000);
+            
+            // Cleanup interval when component unmounts
+            return () => clearInterval(interval);
+        }, (error) => console.log("WS Error", error));
+    };
 
-    // 3. Add Event Listeners
+    initExam();
+
+    // Add Event Listeners
     document.addEventListener('fullscreenchange', checkFullscreen);
     document.addEventListener('visibilitychange', handleTabSwitch);
 
-    // 4. Cleanup Function
+    // Cleanup Function
     return () => {
         document.removeEventListener('fullscreenchange', checkFullscreen);
         document.removeEventListener('visibilitychange', handleTabSwitch);
         
+        const client = stompClientRef.current;
         if (client && client.connected) {
-             // Send OFFLINE signal
-             if (user.userId) {
+            if (user.userId) {
                 const payload = {
                     type: 'OFFLINE',
                     userId: user.userId,
@@ -92,12 +101,11 @@ const ExamArena = () => {
                 try {
                     client.send(`/app/contest/${contestId}/alert`, {}, JSON.stringify(payload));
                 } catch(e) { console.error(e); }
-             }
-             // Do not strictly disconnect here to allow message flush
+            }
+            client.disconnect();
         }
     };
-  }, []);
-
+}, []);
   // --- Judge Action Handler ---
   const handleJudgeAction = (action) => {
       if (action.type === 'WARN') {
@@ -118,43 +126,69 @@ const ExamArena = () => {
 
   const terminateExam = (reason) => {
       alert(reason);
-      navigate('/student/dashboard');
+      // Optional: Auto-submit on force quit
+      handleFinishExam(true); 
   };
 
   // --- Proctoring Logic ---
 
   const startWebcam = async () => {
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 } });
-        if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-        }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: 320, height: 240 }
+      });
+  
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+  
+        await videoRef.current.play();
+  
+        // 🔥 WAIT until video has real frames
+        await new Promise(resolve => {
+          if (videoRef.current.readyState >= 3) {
+            resolve();
+          } else {
+            videoRef.current.oncanplay = resolve;
+          }
+        });
+      }
     } catch (err) {
-        console.error("Camera access denied", err);
-        alert("Camera permission is mandatory! Please allow access.");
+      console.error("Camera access denied", err);
+      alert("Camera permission is mandatory!");
     }
   };
-
+  
   const captureAndSendFrame = () => {
-    if (!stompClientRef.current || !stompClientRef.current.connected || !videoRef.current || !canvasRef.current) return;
-
-    const ctx = canvasRef.current.getContext('2d');
-    ctx.drawImage(videoRef.current, 0, 0, 320, 240);
-    // Convert to low-quality JPEG to save bandwidth
-    const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.5); 
-
-    const payload = {
+    if (!stompClientRef.current?.connected || !videoRef.current || !canvasRef.current) return;
+  
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+  
+    // Ensure video is actually playing and has dimensions
+    if (video.paused || video.ended || video.videoWidth === 0) return;
+  
+    const ctx = canvas.getContext('2d');
+    
+    // Force canvas size to match the draw size
+    canvas.width = 320;
+    canvas.height = 240;
+  
+    ctx.drawImage(video, 0, 0, 320, 240);
+    const imageBase64 = canvas.toDataURL('image/jpeg', 0.5); // Lower quality (0.5) helps socket speed
+  
+    stompClientRef.current.send(
+      `/app/contest/${contestId}/alert`,
+      {},
+      JSON.stringify({
         type: 'CAMERA_FRAME',
         userId: user.userId,
         username: user.username,
-        contestId: contestId,
+        contestId,
         image: imageBase64
-    };
-    
-    try {
-        stompClientRef.current.send(`/app/contest/${contestId}/alert`, {}, JSON.stringify(payload));
-    } catch(e) {}
+      })
+    );
   };
+  
 
   const sendAlert = (type, message) => {
     if (stompClientRef.current && stompClientRef.current.connected && user.userId) {
@@ -258,6 +292,26 @@ const ExamArena = () => {
     if (currentQ) setMcqAnswers({ ...mcqAnswers, [currentQ.mcqId]: option });
   };
 
+  // --- 2. NEW: Submit Exam Logic (Leaderboard Logic) ---
+  const handleFinishExam = async (force = false) => {
+    if(!force && !confirm("Are you sure you want to submit? You cannot undo this.")) return;
+    
+    try {
+        const payload = {
+            userId: user.userId,
+            contestId: Number(contestId),
+            mcqAnswers: mcqAnswers 
+        };
+        await submitExam(payload);
+        alert("Exam Submitted Successfully!");
+        navigate('/student/dashboard');
+    } catch (err) {
+        // Even if submission fails (e.g. already submitted), leave the arena
+        alert("Submission End: " + (err.response?.data || "Completed"));
+        navigate('/student/dashboard');
+    }
+  };
+
   // --- Render ---
 
   if (loading) return <div className="exam-container">Loading...</div>;
@@ -285,11 +339,22 @@ const ExamArena = () => {
 
   const currentQ = questions[currentQIndex];
   if (!currentQ) return <div className="exam-container">Error loading question.</div>;
-
-  return (
+return (
     <div className="exam-container">
-      {/* Hidden Video Elements for Logic */}
-      <video ref={videoRef} autoPlay muted style={{display: 'none'}} width="320" height="240"></video>
+      {/* Video and Canvas for capture */}
+      <video 
+  ref={videoRef} 
+  autoPlay 
+  playsInline 
+  muted 
+  style={{
+    position: 'absolute', 
+    width: '1px', 
+    height: '1px', 
+    opacity: 0, 
+    pointerEvents: 'none'
+  }}
+></video>
       <canvas ref={canvasRef} width="320" height="240" style={{display: 'none'}}></canvas>
 
       {/* Warning Overlay */}
@@ -302,19 +367,18 @@ const ExamArena = () => {
               ⚠️ {warningMessage}
           </div>
       )}
-
       <div className="exam-header">
         <h3>ProctorX Exam Arena</h3>
         <div style={{display:'flex', gap:'20px', alignItems:'center'}}>
             <span style={{background: warningCount > 0 ? '#e74c3c' : '#27ae60', padding:'5px 10px', borderRadius:'4px', fontSize:'0.9rem'}}>
                 Warnings: {warningCount}/3
             </span>
-            <button className="submit-exam-btn" onClick={() => navigate('/student/dashboard')}>Finish</button>
+            {/* 3. NEW: Updated Button onClick */}
+            <button className="submit-exam-btn" onClick={() => handleFinishExam(false)}>Finish Exam</button>
         </div>
       </div>
 
       <div className="exam-body">
-        {/* Sidebar */}
         <div className="question-sidebar">
             <div className="sidebar-header">Questions</div>
             <div className="q-nav-grid">
@@ -324,7 +388,6 @@ const ExamArena = () => {
             </div>
         </div>
 
-        {/* Question & Output Area */}
         <div className="problem-area">
             <div style={{display: 'flex', alignItems: 'center', marginBottom: '10px'}}>
                 <span className="badge">{currentQ.qType}</span>
@@ -338,7 +401,6 @@ const ExamArena = () => {
                     {currentQ.inputFormat && <><h4 style={{marginTop:'20px'}}>Input</h4><p className="problem-desc">{currentQ.inputFormat}</p></>}
                     {currentQ.constraints && <><h4 style={{marginTop:'20px'}}>Constraints</h4><p className="problem-desc">{currentQ.constraints}</p></>}
                     
-                    {/* Output Console */}
                     {verdict && (
                         <div style={{marginTop: '20px', padding: '15px', background: '#f1f1f1', borderRadius: '8px', borderLeft: `5px solid ${verdict === 'AC' ? 'green' : 'red'}`}}>
                             <h4>Verdict: <span style={{color: verdict === 'AC' ? 'green' : 'red'}}>{verdict}</span></h4>
@@ -361,7 +423,6 @@ const ExamArena = () => {
             )}
         </div>
 
-        {/* Editor Area (DSA Only) */}
         {currentQ.qType === 'DSA' && (
             <div className="answer-area">
                 <textarea className="code-editor" value={code} onChange={(e) => setCode(e.target.value)} />
