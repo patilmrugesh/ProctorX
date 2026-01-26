@@ -17,6 +17,23 @@ public class AuthController {
     @Autowired
     private UserService userService;
 
+    // --- NEW: Fetch Fresh User Data (Sync Credits) ---
+    @GetMapping("/user/{id}")
+    public ResponseEntity<?> getUserProfile(@PathVariable Long id) {
+        User user = userService.getUserById(id); // Ensure this method exists in your UserService
+        if (user != null) {
+            Map<String, Object> response = new HashMap<>();
+            response.put("userId", user.getUserId());
+            response.put("walletCredits", user.getWalletCredits());
+            response.put("username", user.getUsername());
+            response.put("email", user.getEmail());
+            response.put("role", user.getRole());
+            return ResponseEntity.ok(response);
+        } else {
+            return ResponseEntity.status(404).body("User not found");
+        }
+    }
+
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody User user) {
         try {

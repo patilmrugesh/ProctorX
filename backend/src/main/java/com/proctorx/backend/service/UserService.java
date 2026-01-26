@@ -38,4 +38,8 @@ public class UserService {
         }
         return null; // Return null if login fails
     }
+
+    public User getUserById(Long id) {
+        return userRepository.findById(id).orElse(null);
+    }
 }
