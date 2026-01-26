@@ -1,5 +1,7 @@
 HELP.md
 target/
+!.mvn/wrapper/maven-wrapper.jar  # Change this to start with !
+.mvn/wrapper/maven-wrapper.properties # Also ensure this isn't ignored
 !**/src/main/**/target/
 !**/src/test/**/target/
 
