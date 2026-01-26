@@ -44,6 +44,11 @@ public class AuthController {
         }
     }
 
+    @PostMapping("/")
+    public String hello(){
+        return "hello";
+    }
+
     @PostMapping("/login")
     public ResponseEntity<?> login(@RequestBody Map<String, String> loginData) {
         String email = loginData.get("email");
