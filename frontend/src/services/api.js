@@ -1,6 +1,7 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:8080/api';
+// const API_URL = 'http://localhost:8080/api';
+const API_URL = 'https://backend-proctorx-2.onrender.com/api';
 
 const api = axios.create({
     baseURL: API_URL,
