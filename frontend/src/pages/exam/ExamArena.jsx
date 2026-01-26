@@ -37,7 +37,6 @@ const ExamArena = () => {
   const canvasRef = useRef(null);
 
   useEffect(() => {
-    // 1. Security Check
     if (!user.userId) {
         alert("Please login to take the exam.");
         navigate('/login');
@@ -46,15 +45,12 @@ const ExamArena = () => {
 
     fetchQuestions();
     
-    // Initialize exam with proper async handling
+    let frameInterval;
+    
     const initExam = async () => {
-        // Start webcam and wait for it
         await startWebcam();
-        
-        // Wait a bit for video stream to stabilize
         await new Promise(resolve => setTimeout(resolve, 1000));
         
-        // Connect to WebSocket
         const socket = new SockJS('http://localhost:8080/ws');
         const client = Stomp.over(socket);
         client.debug = null;
@@ -63,50 +59,57 @@ const ExamArena = () => {
             stompClientRef.current = client;
             sendAlert('ONLINE', 'User joined the exam');
             
-            // Listen for judge actions
             client.subscribe(`/topic/contest/${contestId}/student/${user.userId}`, (message) => {
                 const payload = JSON.parse(message.body);
                 handleJudgeAction(payload);
             });
 
-            // Start sending camera frames every 2 seconds
-            const interval = setInterval(captureAndSendFrame, 2000);
-            
-            // Cleanup interval when component unmounts
-            return () => clearInterval(interval);
-        }, (error) => console.log("WS Error", error));
+            frameInterval = setInterval(captureAndSendFrame, 3000); // 3 seconds
+        }, (error) => {
+            console.error("WS Error", error);
+            alert("Connection failed. Please refresh.");
+        });
     };
 
     initExam();
 
-    // Add Event Listeners
     document.addEventListener('fullscreenchange', checkFullscreen);
     document.addEventListener('visibilitychange', handleTabSwitch);
 
-    // Cleanup Function
     return () => {
         document.removeEventListener('fullscreenchange', checkFullscreen);
         document.removeEventListener('visibilitychange', handleTabSwitch);
         
+        // Clear interval
+        if (frameInterval) {
+            clearInterval(frameInterval);
+        }
+        
+        // Stop webcam
+        if (videoRef.current?.srcObject) {
+            videoRef.current.srcObject.getTracks().forEach(track => track.stop());
+        }
+        
+        // Disconnect WebSocket
         const client = stompClientRef.current;
-        if (client && client.connected) {
-            if (user.userId) {
-                const payload = {
+        if (client?.connected) {
+            try {
+                client.send(`/app/contest/${contestId}/alert`, {}, JSON.stringify({
                     type: 'OFFLINE',
                     userId: user.userId,
                     username: user.username,
                     contestId: contestId,
                     message: 'User left the exam'
-                };
-                try {
-                    client.send(`/app/contest/${contestId}/alert`, {}, JSON.stringify(payload));
-                } catch(e) { console.error(e); }
+                }));
+            } catch(e) { 
+                console.error("Cleanup error:", e); 
             }
             client.disconnect();
         }
     };
-}, []);
-  // --- Judge Action Handler ---
+}, [contestId, navigate]); // Add dependencies
+
+// --- Judge Action Handler ---
   const handleJudgeAction = (action) => {
       if (action.type === 'WARN') {
           setWarningCount(prev => {
@@ -135,7 +138,7 @@ const ExamArena = () => {
   const startWebcam = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 320, height: 240 }
+        video: { width: 160, height: 120 }
       });
   
       if (videoRef.current) {
@@ -159,35 +162,50 @@ const ExamArena = () => {
   };
   
   const captureAndSendFrame = () => {
-    if (!stompClientRef.current?.connected || !videoRef.current || !canvasRef.current) return;
-  
+    // ✅ Add more robust checks
+    if (!stompClientRef.current?.connected) {
+        console.warn("WebSocket not connected, skipping frame");
+        return;
+    }
+    
+    if (!videoRef.current || !canvasRef.current) {
+        console.warn("Video/Canvas refs not ready");
+        return;
+    }
+
     const video = videoRef.current;
     const canvas = canvasRef.current;
-  
-    // Ensure video is actually playing and has dimensions
-    if (video.paused || video.ended || video.videoWidth === 0) return;
-  
-    const ctx = canvas.getContext('2d');
-    
-    // Force canvas size to match the draw size
-    canvas.width = 320;
-    canvas.height = 240;
-  
-    ctx.drawImage(video, 0, 0, 320, 240);
-    const imageBase64 = canvas.toDataURL('image/jpeg', 0.5); // Lower quality (0.5) helps socket speed
-  
-    stompClientRef.current.send(
-      `/app/contest/${contestId}/alert`,
-      {},
-      JSON.stringify({
-        type: 'CAMERA_FRAME',
-        userId: user.userId,
-        username: user.username,
-        contestId,
-        image: imageBase64
-      })
-    );
-  };
+
+    // ✅ Better video readiness check
+    if (video.paused || video.ended || video.videoWidth === 0 || video.readyState < 2) {
+        console.warn("Video not ready yet");
+        return;
+    }
+
+    try {
+        const ctx = canvas.getContext('2d');
+        canvas.width = 320;
+        canvas.height = 240;
+        ctx.drawImage(video, 0, 0, 320, 240);
+        
+        // const imageBase64 = canvas.toDataURL('image/jpeg', 0.3); // ✅ Lower quality
+        const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.6);
+
+        stompClientRef.current.send(
+            `/app/contest/${contestId}/alert`,
+            {},
+            JSON.stringify({
+                type: 'CAMERA_FRAME',
+                userId: user.userId,
+                username: user.username,
+                contestId,
+                image: imageBase64
+            })
+        );
+    } catch (err) {
+        console.error("Frame capture error:", err);
+    }
+};
   
 
   const sendAlert = (type, message) => {

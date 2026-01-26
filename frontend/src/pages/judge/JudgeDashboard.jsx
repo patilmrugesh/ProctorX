@@ -90,7 +90,12 @@ const JudgeDashboard = () => {
             }
 
             if (event.type === 'CAMERA_FRAME') {
-                updatedStudent.image = event.image; // Update the image data
+                setStudents((prev) => 
+                    prev.map(s => s.userId == event.userId 
+                        ? { ...s, image: event.image } // Only update the image
+                        : s
+                    )
+                );
             }
 
             newList[existingIndex] = updatedStudent;
