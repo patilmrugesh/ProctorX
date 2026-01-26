@@ -19,17 +19,24 @@ public class ProctoringController {
 
     @MessageMapping("/contest/{contestId}/alert")
     public void handleAlert(@DestinationVariable Long contestId, @Payload ProctorEvent event) {
+        try {
+            event.setTimestamp(LocalDateTime.now().toString());
+            event.setContestId(contestId);
 
-        event.setTimestamp(LocalDateTime.now().toString());
-        event.setContestId(contestId);
+            if (!"CAMERA_FRAME".equals(event.getType())) {
+                System.out.println("ALERT: " + event.getType() + " from " + event.getUsername());
+            } else {
+                // Log image size to debug
+                if (event.getImage() != null) {
+                    System.out.println("Frame size: " + event.getImage().length() + " bytes");
+                }
+            }
 
-        // Only log alerts, not video frames (too spammy)
-        if (!"CAMERA_FRAME".equals(event.getType())) {
-            System.out.println("ALERT: " + event.getType() + " from " + event.getUsername());
+            messagingTemplate.convertAndSend("/topic/contest/" + contestId + "/judge", event);
+        } catch (Exception e) {
+            System.err.println("Error handling alert: " + e.getMessage());
+            e.printStackTrace();
         }
-
-        // Broadcast to Judges
-        messagingTemplate.convertAndSend("/topic/contest/" + contestId + "/judge", event);
     }
     // --- NEW: Handle Judge Actions (Warn/Suspend) ---
     @MessageMapping("/contest/{contestId}/judge-action")
