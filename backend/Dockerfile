@@ -2,6 +2,11 @@
 FROM eclipse-temurin:17-jdk-jammy AS build
 WORKDIR /app
 COPY . .
+
+
+# Add this line to make the wrapper executable
+RUN chmod +x mvnw
+
 # Run maven build
 RUN ./mvnw clean package -DskipTests
 
