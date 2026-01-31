@@ -370,3 +370,27 @@ textarea {
         padding: 1.5rem;
     }
 }
+/* ... keep existing styles ... */
+
+.tc-btn {
+    padding: 6px 12px;
+    border: 1px solid #3498db;
+    background: #e3f2fd;
+    color: #3498db;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    font-weight: bold;
+    margin-left: 10px;
+    cursor: pointer;
+}
+
+.tc-btn:hover {
+    background: #3498db;
+    color: white;
+}
+
+/* New: Modal Scroll Styling */
+.modal-content {
+    max-height: 90vh;
+    overflow-y: auto;
+}

@@ -104,11 +104,18 @@ const AdminDashboard = () => {
 
   const handleStatusToggle = async (contest) => {
     const newStatus = contest.status === 'LIVE' ? 'DRAFT' : 'LIVE';
+    
+    // Warning for going live
+    if (newStatus === 'LIVE' && !window.confirm("Going LIVE will deduct 1 Token from your wallet. Continue?")) {
+        return;
+    }
+
     try {
       await updateContestStatus(contest.contestId, newStatus);
       fetchContests();
+      fetchWalletCredits(); // Refresh credits after deduction
     } catch (err) {
-      alert("Failed to update status");
+      alert(err.response?.data || "Failed to update status");
     }
   };
 
@@ -136,6 +143,11 @@ const AdminDashboard = () => {
     if (!text) return;
     navigator.clipboard.writeText(text);
     alert(`${label} copied to clipboard!`);
+  };
+
+  const handleTestContest = (token) => {
+      // Navigate to student dashboard with the token pre-filled
+      navigate('/student/dashboard', { state: { autoToken: token } });
   };
 
   // --- Render Logic ---
@@ -203,12 +215,25 @@ const AdminDashboard = () => {
                   <h3>{contest.title}</h3>
                   <span className="type-badge">{contest.type}</span>
                 </div>
-                <div
-                  className={`status-dot ${contest.status === 'LIVE' ? 'live' : ''}`}
-                  title={`Status: ${contest.status} (Click to toggle)`}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => handleStatusToggle(contest)}
-                ></div>
+                
+                <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                    {/* --- TEST BUTTON --- */}
+                    <button 
+                        className="action-btn"
+                        style={{padding: '4px 8px', fontSize: '0.8rem', height: 'auto', color: '#3498db', borderColor: '#3498db'}}
+                        onClick={() => handleTestContest(contest.studentToken)}
+                        title="Simulate Student View"
+                    >
+                        Test
+                    </button>
+
+                    <div
+                      className={`status-dot ${contest.status === 'LIVE' ? 'live' : ''}`}
+                      title={`Status: ${contest.status} (Click to toggle)`}
+                      style={{ cursor: 'pointer' }}
+                      onClick={() => handleStatusToggle(contest)}
+                    ></div>
+                </div>
               </div>
 
               <p className="card-desc">{contest.description || "No description provided."}</p>
@@ -242,6 +267,7 @@ const AdminDashboard = () => {
               <div className="card-actions">
                 <button
                   className="action-btn"
+                  style={{ color: 'blue', borderColor: 'blue' }}
                   onClick={() => navigate(`/admin/contest/${contest.contestId}/questions`)}
                 >
                   Questions
@@ -257,6 +283,7 @@ const AdminDashboard = () => {
 
                 <button
                   className="action-btn"
+                  style={{ color: 'black', borderColor: 'black' }}
                   title="Upload Allowed Emails (CSV)"
                   onClick={() => handleUploadClick(contest.contestId)}
                 >

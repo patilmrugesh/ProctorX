@@ -90,9 +90,9 @@ const CreateContest = () => {
             </div>
           </div>
 
-          <div className="warning-box">
+          {/* <div className="warning-box">
             ⚠️ Creating this contest will deduct <strong>1 Credit</strong> from your wallet.
-          </div>
+          </div> */}
 
           <div className="button-group">
             <button type="button" onClick={() => navigate('/admin/dashboard')} className="cancel-btn">

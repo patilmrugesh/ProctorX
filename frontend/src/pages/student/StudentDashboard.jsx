@@ -1,28 +1,38 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { joinContest, joinJudge } from '../../services/api'; // Import joinJudge
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { joinContest, joinJudge } from '../../services/api';
 import './StudentDashboard.css';
 
 const StudentDashboard = () => {
   const [token, setToken] = useState('');
-  const [judgeToken, setJudgeToken] = useState(''); // New State
+  const [judgeToken, setJudgeToken] = useState('');
   const [contest, setContest] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   
   const navigate = useNavigate();
+  const location = useLocation(); // Hook to access state passed from Admin
   const user = JSON.parse(localStorage.getItem('user'));
+
+  // --- Check for Auto-Fill Token ---
+  useEffect(() => {
+      if (location.state?.autoToken) {
+          setToken(location.state.autoToken);
+      }
+  }, [location.state]);
 
   const handleLogout = () => {
     localStorage.removeItem('user');
     navigate('/login');
   };
 
-  // Student Join Logic
   const handleJoin = async (e) => {
     e.preventDefault();
     if (!token) return;
-    setLoading(true); setError(''); setContest(null);
+    
+    setLoading(true);
+    setError('');
+    setContest(null);
 
     try {
       const response = await joinContest(token, user.email);
@@ -34,17 +44,15 @@ const StudentDashboard = () => {
     }
   };
 
-  // Judge Join Logic
   const handleJudgeJoin = async (e) => {
     e.preventDefault();
     if (!judgeToken) return;
     
     try {
         const response = await joinJudge(judgeToken);
-        // Navigate to Judge Dashboard
         navigate(`/judge/monitor/${response.data.contestId}`, { state: { contest: response.data } });
     } catch (err) {
-        alert("Invalid Judge Token");
+        alert("Invalid Judge Token or Contest not Active");
     }
   };
 
@@ -60,13 +68,27 @@ const StudentDashboard = () => {
             <h1>Welcome, {user?.username}</h1>
             <p>Ready to prove your skills? Enter your exam token below.</p>
           </div>
-          <button onClick={handleLogout} className="action-btn" style={{background:'rgba(255,255,255,0.2)', color:'white', border:'none'}}>Logout</button>
+          <button 
+            onClick={handleLogout}
+            style={{
+              background: 'rgba(255,255,255,0.2)', 
+              border: '1px solid rgba(255,255,255,0.4)', 
+              color: 'white', 
+              padding: '8px 16px', 
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: '600'
+            }}
+          >
+            Logout
+          </button>
         </div>
       </div>
 
-      {/* Student Join Section */}
       <div className="join-section">
         <h3>Join an Assessment</h3>
+        <p style={{color: '#666', marginBottom: '1rem'}}>Ask your administrator for the unique Student Token.</p>
+        
         <form onSubmit={handleJoin}>
           <div className="token-input-group">
             <input 
@@ -87,14 +109,38 @@ const StudentDashboard = () => {
 
         {contest && (
           <div className="contest-details">
-            <h2>{contest.title}</h2>
-            <p>{contest.description}</p>
-            <button className="start-btn" onClick={handleStartExam}>Start Exam Now</button>
+            <h2 style={{borderBottom: '1px solid #eee', paddingBottom: '10px'}}>{contest.title}</h2>
+            
+            <div className="details-grid">
+              <div className="detail-item">
+                <label>Type</label>
+                <p>{contest.type}</p>
+              </div>
+              <div className="detail-item">
+                <label>Duration</label>
+                <p>{contest.durationMinutes} Mins</p>
+              </div>
+              <div className="detail-item">
+                <label>Status</label>
+                <p style={{color: contest.status === 'LIVE' ? 'green' : 'orange', fontWeight: 'bold'}}>
+                    {contest.status}
+                </p>
+              </div>
+            </div>
+
+            <p style={{marginBottom: '1rem', color: '#555'}}>{contest.description}</p>
+            
+            <div style={{background: '#fff3cd', padding: '10px', borderRadius: '4px', fontSize: '0.9rem', marginBottom: '1rem'}}>
+              ⚠️ <strong>Warning:</strong> Fullscreen mode is enforced. Tab switching is monitored.
+            </div>
+
+            <button className="start-btn" onClick={handleStartExam}>
+              Start Exam Now
+            </button>
           </div>
         )}
       </div>
 
-      {/* --- NEW: Judge Join Section --- */}
       <div style={{marginTop: '3rem', textAlign: 'center', borderTop: '1px solid #ddd', paddingTop: '2rem'}}>
         <h4 style={{color: '#666'}}>Are you a Judge?</h4>
         <form onSubmit={handleJudgeJoin} style={{display: 'flex', justifyContent: 'center', gap: '10px', marginTop: '1rem'}}>

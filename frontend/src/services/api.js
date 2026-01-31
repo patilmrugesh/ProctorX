@@ -1,7 +1,6 @@
 import axios from 'axios';
 
-// const API_URL = 'http://localhost:8080/api';
-const API_URL = 'https://backend-proctorx-2.onrender.com/api';
+const API_URL = 'http://localhost:8080/api';
 
 const api = axios.create({
     baseURL: API_URL,
@@ -22,15 +21,23 @@ export const uploadContestUsers = (contestId, file) => {
 };
 
 export const addDSAQuestion = (contestId, data) => api.post(`/questions/dsa/add?contestId=${contestId}`, data);
+export const updateDSAQuestion = (questionId, data) => api.put(`/questions/dsa/${questionId}`, data);
+export const deleteDSAQuestion = (questionId) => api.delete(`/questions/dsa/${questionId}`); // NEW
+
 export const addMCQQuestion = (contestId, data) => api.post(`/questions/mcq/add?contestId=${contestId}`, data);
+export const updateMCQQuestion = (questionId, data) => api.put(`/questions/mcq/${questionId}`, data);
+export const deleteMCQQuestion = (questionId) => api.delete(`/questions/mcq/${questionId}`); // NEW
+
+export const deleteAllQuestions = (contestId) => api.delete(`/questions/contest/${contestId}/all`); // NEW
+
 export const addTestCase = (questionId, data) => api.post(`/questions/cases/add?questionId=${questionId}`, data);
+export const getTestCases = (questionId) => api.get(`/questions/${questionId}/cases`);
+export const deleteTestCase = (testCaseId) => api.delete(`/questions/cases/${testCaseId}`);
 
 export const joinContest = (token, email) => api.get(`/contests/join/${token}?email=${email}`);
 export const joinJudge = (token) => api.get(`/contests/judge/join/${token}`);
 
 export const runCode = (data) => api.post('/submissions/run', data);
-
-// --- NEW ---
 export const submitExam = (data) => api.post('/contests/submit', data);
 export const getLeaderboard = (contestId) => api.get(`/contests/${contestId}/leaderboard`);
 

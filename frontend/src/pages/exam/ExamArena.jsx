@@ -189,7 +189,7 @@ const ExamArena = () => {
         ctx.drawImage(video, 0, 0, 320, 240);
         
         // const imageBase64 = canvas.toDataURL('image/jpeg', 0.3); // ✅ Lower quality
-        const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.6);
+        const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.1);
 
         stompClientRef.current.send(
             `/app/contest/${contestId}/alert`,
