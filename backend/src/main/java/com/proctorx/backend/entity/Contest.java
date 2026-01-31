@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonIgnore; // Import this!
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,9 +31,9 @@ public class Contest {
     private String description;
 
     @Column(nullable = false)
-    private String type; // 'DSA', 'MCQ', 'HYBRID'
+    private String type;
 
-    private String status = "DRAFT"; // 'DRAFT', 'LIVE', 'ENDED'
+    private String status = "DRAFT";
 
     @Column(name = "student_token", unique = true)
     private String studentToken;
@@ -49,9 +50,26 @@ public class Contest {
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 
-    // --- NEW: Whitelist for Emails ---
     @ElementCollection
     @CollectionTable(name = "contest_allowed_emails", joinColumns = @JoinColumn(name = "contest_id"))
     @Column(name = "email")
     private List<String> allowedEmails = new ArrayList<>();
+
+    // --- FIX: Add @JsonIgnore to break the loop ---
+
+    @OneToMany(mappedBy = "contest", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
+    private List<QuestionDSA> dsaQuestions;
+
+    @OneToMany(mappedBy = "contest", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
+    private List<QuestionMCQ> mcqQuestions;
+
+    @OneToMany(mappedBy = "contest", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
+    private List<Submission> submissions;
+
+    @OneToMany(mappedBy = "contest", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
+    private List<ContestResult> results;
 }

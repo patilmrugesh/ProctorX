@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonIgnore; // Import this
 
 @Entity
 @Table(name = "test_cases")
@@ -16,8 +17,10 @@ public class TestCase {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // FIX: Add @JsonIgnore to prevent recursion (TestCase -> Question -> TestCase...)
     @ManyToOne
     @JoinColumn(name = "question_id", nullable = false)
+    @JsonIgnore
     private QuestionDSA questionDSA;
 
     @Column(name = "input_data", nullable = false, columnDefinition = "TEXT")
@@ -26,8 +29,6 @@ public class TestCase {
     @Column(name = "expected_output", nullable = false, columnDefinition = "TEXT")
     private String expectedOutput;
 
-    // hidden = true means this test case is NOT shown to the student
-    // hidden = false means it is a Sample Case
     @Column(name = "is_hidden")
     private boolean isHidden = true;
 }

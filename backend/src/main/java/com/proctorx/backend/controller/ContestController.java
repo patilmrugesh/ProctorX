@@ -28,6 +28,16 @@ public class ContestController {
         return ResponseEntity.ok(contestService.getContestsByAdmin(adminId));
     }
 
+    // --- NEW: Update Contest Details (Type, Title, etc.) ---
+    @PutMapping("/{contestId}")
+    public ResponseEntity<?> updateContest(@PathVariable Long contestId, @RequestBody Contest contest) {
+        try {
+            return ResponseEntity.ok(contestService.updateContest(contestId, contest));
+        } catch (RuntimeException e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
+
     @DeleteMapping("/{contestId}")
     public ResponseEntity<?> deleteContest(@PathVariable Long contestId) {
         contestService.deleteContest(contestId);
@@ -57,14 +67,12 @@ public class ContestController {
         catch (RuntimeException e) { return ResponseEntity.badRequest().body(e.getMessage()); }
     }
 
-    // --- NEW: Submit Exam ---
     @PostMapping("/submit")
     public ResponseEntity<?> submitExam(@RequestBody SubmitExamRequest request) {
         try { return ResponseEntity.ok(contestService.submitExam(request)); }
         catch (Exception e) { return ResponseEntity.badRequest().body(e.getMessage()); }
     }
 
-    // --- NEW: Leaderboard ---
     @GetMapping("/{contestId}/leaderboard")
     public ResponseEntity<?> getLeaderboard(@PathVariable Long contestId) {
         return ResponseEntity.ok(contestService.getLeaderboard(contestId));

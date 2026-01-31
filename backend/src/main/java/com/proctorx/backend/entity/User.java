@@ -18,9 +18,11 @@ public class User {
     @Column(name = "user_id")
     private Long userId;
 
-    @Column(nullable = false, unique = true)
+    // CHANGE: Removed 'unique = true'. Now multiple users can have the same name.
+    @Column(nullable = false)
     private String username;
 
+    // KEPT: Email must still be unique for login purposes.
     @Column(nullable = false, unique = true)
     private String email;
 

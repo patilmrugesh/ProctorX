@@ -18,15 +18,16 @@ public class ContestService {
     @Autowired private ContestRepository contestRepository;
     @Autowired private UserRepository userRepository;
     @Autowired private QuestionMCQRepository mcqRepository;
+    @Autowired private QuestionDSARepository dsaRepository;
     @Autowired private SubmissionRepository submissionRepository;
     @Autowired private ContestResultRepository resultRepository;
 
     @Transactional
     public Contest createContest(Long adminId, Contest contest) {
         User admin = userRepository.findById(adminId).orElseThrow(() -> new RuntimeException("Admin not found"));
-        if (admin.getWalletCredits() < 1) throw new RuntimeException("Insufficient credits!");
+        // Tokens deducted on Go Live
 
-        admin.setWalletCredits(admin.getWalletCredits() - 1);
+        admin.setWalletCredits(admin.getWalletCredits());
         userRepository.save(admin);
 
         contest.setStudentToken(UUID.randomUUID().toString().substring(0, 6).toUpperCase());
@@ -35,6 +36,29 @@ public class ContestService {
         contest.setStatus("DRAFT");
 
         return contestRepository.save(contest);
+    }
+
+    @Transactional
+    public Contest updateContest(Long contestId, Contest updated) {
+        Contest existing = contestRepository.findById(contestId)
+                .orElseThrow(() -> new RuntimeException("Contest not found"));
+
+        String newType = updated.getType();
+
+        existing.setTitle(updated.getTitle());
+        existing.setDescription(updated.getDescription());
+        existing.setType(newType);
+        existing.setDurationMinutes(updated.getDurationMinutes());
+
+        if ("DSA".equals(newType)) {
+            List<QuestionMCQ> mcqs = mcqRepository.findByContest_ContestId(contestId);
+            if (!mcqs.isEmpty()) mcqRepository.deleteAll(mcqs);
+        } else if ("MCQ".equals(newType)) {
+            List<QuestionDSA> dsas = dsaRepository.findByContest_ContestId(contestId);
+            if (!dsas.isEmpty()) dsaRepository.deleteAll(dsas);
+        }
+
+        return contestRepository.save(existing);
     }
 
     public List<Contest> getContestsByAdmin(Long adminId) {
@@ -46,9 +70,19 @@ public class ContestService {
         contestRepository.deleteById(contestId);
     }
 
-
+    @Transactional
     public Contest updateStatus(Long contestId, String status) {
         Contest contest = contestRepository.findById(contestId).orElseThrow(() -> new RuntimeException("Contest not found"));
+
+        if ("LIVE".equalsIgnoreCase(status) && !"LIVE".equalsIgnoreCase(contest.getStatus())) {
+            User admin = contest.getAdmin();
+            if (admin.getWalletCredits() < 1) {
+                throw new RuntimeException("Insufficient tokens! You need at least 1 token to go Live.");
+            }
+            admin.setWalletCredits(admin.getWalletCredits() - 1);
+            userRepository.save(admin);
+        }
+
         contest.setStatus(status);
         return contestRepository.save(contest);
     }
@@ -68,6 +102,11 @@ public class ContestService {
 
     public Contest joinContest(String token, String studentEmail) {
         Contest contest = contestRepository.findByStudentToken(token).orElseThrow(() -> new RuntimeException("Invalid Token"));
+
+        if (contest.getAdmin().getEmail().equalsIgnoreCase(studentEmail)) {
+            return contest;
+        }
+
         if (!"LIVE".equalsIgnoreCase(contest.getStatus())) throw new RuntimeException("Contest is not active yet.");
         if (!contest.getAllowedEmails().isEmpty() && !contest.getAllowedEmails().contains(studentEmail.trim().toLowerCase())) {
             throw new RuntimeException("Access Denied: Email not verified.");
@@ -85,7 +124,7 @@ public class ContestService {
         return contestRepository.findByStudentToken(token);
     }
 
-    // --- NEW: Submit Exam & Calculate Score ---
+    // --- Submit Exam & Calculate Score ---
     public ContestResult submitExam(SubmitExamRequest request) {
         if (resultRepository.existsByContest_ContestIdAndUser_UserId(request.getContestId(), request.getUserId())) {
             throw new RuntimeException("You have already submitted this exam!");
@@ -94,7 +133,7 @@ public class ContestService {
         int mcqScore = 0;
         int dsaScore = 0;
 
-        // 1. Calculate MCQ Score
+        // 1. MCQ Score
         if (request.getMcqAnswers() != null) {
             for (Map.Entry<Long, String> entry : request.getMcqAnswers().entrySet()) {
                 QuestionMCQ mcq = mcqRepository.findById(entry.getKey()).orElse(null);
@@ -104,15 +143,17 @@ public class ContestService {
             }
         }
 
-        // 2. Calculate DSA Score (10 pts per AC)
+        // 2. DSA Score (Dynamic based on Question Weight)
         List<Submission> submissions = submissionRepository.findByUser_UserIdAndContest_ContestId(request.getUserId(), request.getContestId());
         Set<Long> solvedQuestions = new HashSet<>();
+
         for (Submission sub : submissions) {
-            if ("AC".equals(sub.getVerdict())) {
+            // Check if solved AND not already counted
+            if ("AC".equals(sub.getVerdict()) && !solvedQuestions.contains(sub.getQuestion().getQuestionId())) {
+                dsaScore += sub.getQuestion().getMarks(); // Use question-specific marks
                 solvedQuestions.add(sub.getQuestion().getQuestionId());
             }
         }
-        dsaScore = solvedQuestions.size() * 10;
 
         // 3. Save Result
         ContestResult result = new ContestResult();
@@ -125,7 +166,6 @@ public class ContestService {
         return resultRepository.save(result);
     }
 
-    // --- NEW: Get Leaderboard ---
     public List<ContestResult> getLeaderboard(Long contestId) {
         return resultRepository.findByContest_ContestIdOrderByTotalScoreDesc(contestId);
     }

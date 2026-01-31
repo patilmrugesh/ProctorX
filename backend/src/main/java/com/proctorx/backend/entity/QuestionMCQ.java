@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonIgnore; // Import this
 
 @Entity
 @Table(name = "questions_mcq")
@@ -17,14 +18,15 @@ public class QuestionMCQ {
     @Column(name = "mcq_id")
     private Long mcqId;
 
+    // FIX: Add @JsonIgnore to prevent recursion (Question -> Contest -> List<Question>...)
     @ManyToOne
     @JoinColumn(name = "contest_id", nullable = false)
+    @JsonIgnore
     private Contest contest;
 
     @Column(name = "question_text", nullable = false, columnDefinition = "TEXT")
     private String questionText;
 
-    // Optional: For image-based questions (Future Scope)
     @Column(name = "image_url")
     private String imageUrl;
 
@@ -40,9 +42,8 @@ public class QuestionMCQ {
     @Column(name = "option_d")
     private String optionD;
 
-    // Stores 'A', 'B', 'C', or 'D'
     @Column(name = "correct_option", nullable = false, length = 1)
     private String correctOption;
 
-    private Integer marks = 1;
+    private Integer marks = 2; // Default marks
 }

@@ -4,6 +4,8 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import java.util.List;
 
 @Entity
 @Table(name = "questions_dsa")
@@ -17,9 +19,9 @@ public class QuestionDSA {
     @Column(name = "question_id")
     private Long questionId;
 
-    // Link this question to a specific Contest
     @ManyToOne
     @JoinColumn(name = "contest_id", nullable = false)
+    @JsonIgnore
     private Contest contest;
 
     @Column(nullable = false)
@@ -37,11 +39,22 @@ public class QuestionDSA {
     @Column(columnDefinition = "TEXT")
     private String constraints;
 
-    private String difficulty; // 'EASY', 'MEDIUM', 'HARD'
+    private String difficulty;
 
     @Column(name = "time_limit_sec")
-    private Double timeLimitSec = 1.0;
+    private Double timeLimitSec = 600.0;
 
     @Column(name = "memory_limit_mb")
     private Integer memoryLimitMb = 256;
+
+    // --- NEW: Custom Marks for DSA (Default 5) ---
+    @Column(name = "marks")
+    private Integer marks = 5;
+
+    @OneToMany(mappedBy = "questionDSA", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<TestCase> testCases;
+
+    @OneToMany(mappedBy = "question", cascade = CascadeType.ALL, orphanRemoval = true)
+    @JsonIgnore
+    private List<Submission> submissions;
 }
