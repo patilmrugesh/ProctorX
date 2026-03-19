@@ -10,22 +10,28 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.time.LocalDateTime;
 import java.util.*;
 
 @Service
 public class ContestService {
 
-    @Autowired private ContestRepository contestRepository;
-    @Autowired private UserRepository userRepository;
-    @Autowired private QuestionMCQRepository mcqRepository;
-    @Autowired private QuestionDSARepository dsaRepository;
-    @Autowired private SubmissionRepository submissionRepository;
-    @Autowired private ContestResultRepository resultRepository;
+    @Autowired
+    private ContestRepository contestRepository;
+    @Autowired
+    private UserRepository userRepository;
+    @Autowired
+    private QuestionMCQRepository mcqRepository;
+    @Autowired
+    private QuestionDSARepository dsaRepository;
+    @Autowired
+    private SubmissionRepository submissionRepository;
+    @Autowired
+    private ContestResultRepository resultRepository;
 
     @Transactional
     public Contest createContest(Long adminId, Contest contest) {
         User admin = userRepository.findById(adminId).orElseThrow(() -> new RuntimeException("Admin not found"));
-        // Tokens deducted on Go Live
 
         admin.setWalletCredits(admin.getWalletCredits());
         userRepository.save(admin);
@@ -49,13 +55,21 @@ public class ContestService {
         existing.setDescription(updated.getDescription());
         existing.setType(newType);
         existing.setDurationMinutes(updated.getDurationMinutes());
+        existing.setTimerType(updated.getTimerType());
+        existing.setQuestionTimerSeconds(updated.getQuestionTimerSeconds());
+
+        // --- NEW: Save start and end times ---
+        existing.setStartTime(updated.getStartTime());
+        existing.setEndTime(updated.getEndTime());
 
         if ("DSA".equals(newType)) {
             List<QuestionMCQ> mcqs = mcqRepository.findByContest_ContestId(contestId);
-            if (!mcqs.isEmpty()) mcqRepository.deleteAll(mcqs);
+            if (!mcqs.isEmpty())
+                mcqRepository.deleteAll(mcqs);
         } else if ("MCQ".equals(newType)) {
             List<QuestionDSA> dsas = dsaRepository.findByContest_ContestId(contestId);
-            if (!dsas.isEmpty()) dsaRepository.deleteAll(dsas);
+            if (!dsas.isEmpty())
+                dsaRepository.deleteAll(dsas);
         }
 
         return contestRepository.save(existing);
@@ -72,14 +86,30 @@ public class ContestService {
 
     @Transactional
     public Contest updateStatus(Long contestId, String status) {
-        Contest contest = contestRepository.findById(contestId).orElseThrow(() -> new RuntimeException("Contest not found"));
+        Contest contest = contestRepository.findById(contestId)
+                .orElseThrow(() -> new RuntimeException("Contest not found"));
 
         if ("LIVE".equalsIgnoreCase(status) && !"LIVE".equalsIgnoreCase(contest.getStatus())) {
             User admin = contest.getAdmin();
-            if (admin.getWalletCredits() < 1) {
-                throw new RuntimeException("Insufficient tokens! You need at least 1 token to go Live.");
+
+            // --- NEW: Time Window & Token Logic ---
+            if (contest.getStartTime() == null || contest.getEndTime() == null) {
+                throw new RuntimeException("Start Time and End Time must be set before going LIVE.");
             }
-            admin.setWalletCredits(admin.getWalletCredits() - 1);
+
+            long durationMinutes = java.time.Duration.between(contest.getStartTime(), contest.getEndTime()).toMinutes();
+            if (durationMinutes <= 0) {
+                throw new RuntimeException("End Time must be after Start Time.");
+            }
+
+            // 1 token per 2 hours (120 mins). Math.ceil rounds up (e.g. 150 mins = 2 tokens)
+            int tokensRequired = (int) Math.ceil(durationMinutes / 120.0);
+
+            if (admin.getWalletCredits() < tokensRequired) {
+                throw new RuntimeException("Insufficient tokens! You need " + tokensRequired + " tokens for a " + durationMinutes + " minute window.");
+            }
+
+            admin.setWalletCredits(admin.getWalletCredits() - tokensRequired);
             userRepository.save(admin);
         }
 
@@ -88,35 +118,54 @@ public class ContestService {
     }
 
     public Contest uploadAllowedEmails(Long contestId, MultipartFile file) {
-        Contest contest = contestRepository.findById(contestId).orElseThrow(() -> new RuntimeException("Contest not found"));
+        Contest contest = contestRepository.findById(contestId)
+                .orElseThrow(() -> new RuntimeException("Contest not found"));
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream()))) {
             List<String> emails = new ArrayList<>();
             String line;
             while ((line = reader.readLine()) != null) {
-                if (line.contains("@")) emails.add(line.trim().toLowerCase());
+                if (line.contains("@"))
+                    emails.add(line.trim().toLowerCase());
             }
             contest.setAllowedEmails(emails);
             return contestRepository.save(contest);
-        } catch (Exception e) { throw new RuntimeException("Failed to parse CSV"); }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to parse CSV");
+        }
     }
 
     public Contest joinContest(String token, String studentEmail) {
-        Contest contest = contestRepository.findByStudentToken(token).orElseThrow(() -> new RuntimeException("Invalid Token"));
+        Contest contest = contestRepository.findByStudentToken(token)
+                .orElseThrow(() -> new RuntimeException("Invalid Token"));
 
         if (contest.getAdmin().getEmail().equalsIgnoreCase(studentEmail)) {
             return contest;
         }
 
-        if (!"LIVE".equalsIgnoreCase(contest.getStatus())) throw new RuntimeException("Contest is not active yet.");
-        if (!contest.getAllowedEmails().isEmpty() && !contest.getAllowedEmails().contains(studentEmail.trim().toLowerCase())) {
+        if (!"LIVE".equalsIgnoreCase(contest.getStatus()))
+            throw new RuntimeException("Contest is not active yet.");
+
+        // --- NEW: Check if current time is within bounds ---
+        LocalDateTime now = LocalDateTime.now();
+        if (contest.getStartTime() != null && now.isBefore(contest.getStartTime())) {
+            throw new RuntimeException("Contest has not started yet. Please wait until " + contest.getStartTime());
+        }
+        if (contest.getEndTime() != null && now.isAfter(contest.getEndTime())) {
+            throw new RuntimeException("Contest window has already ended.");
+        }
+
+        if (!contest.getAllowedEmails().isEmpty()
+                && !contest.getAllowedEmails().contains(studentEmail.trim().toLowerCase())) {
             throw new RuntimeException("Access Denied: Email not verified.");
         }
         return contest;
     }
 
     public Contest joinContestAsJudge(String token) {
-        Contest contest = contestRepository.findByJudgeToken(token).orElseThrow(() -> new RuntimeException("Invalid Judge Token"));
-        if (!"LIVE".equalsIgnoreCase(contest.getStatus())) throw new RuntimeException("Contest is not active yet.");
+        Contest contest = contestRepository.findByJudgeToken(token)
+                .orElseThrow(() -> new RuntimeException("Invalid Judge Token"));
+        if (!"LIVE".equalsIgnoreCase(contest.getStatus()))
+            throw new RuntimeException("Contest is not active yet.");
         return contest;
     }
 
@@ -124,7 +173,6 @@ public class ContestService {
         return contestRepository.findByStudentToken(token);
     }
 
-    // --- Submit Exam & Calculate Score ---
     public ContestResult submitExam(SubmitExamRequest request) {
         if (resultRepository.existsByContest_ContestIdAndUser_UserId(request.getContestId(), request.getUserId())) {
             throw new RuntimeException("You have already submitted this exam!");
@@ -133,7 +181,6 @@ public class ContestService {
         int mcqScore = 0;
         int dsaScore = 0;
 
-        // 1. MCQ Score
         if (request.getMcqAnswers() != null) {
             for (Map.Entry<Long, String> entry : request.getMcqAnswers().entrySet()) {
                 QuestionMCQ mcq = mcqRepository.findById(entry.getKey()).orElse(null);
@@ -143,19 +190,17 @@ public class ContestService {
             }
         }
 
-        // 2. DSA Score (Dynamic based on Question Weight)
-        List<Submission> submissions = submissionRepository.findByUser_UserIdAndContest_ContestId(request.getUserId(), request.getContestId());
+        List<Submission> submissions = submissionRepository.findByUser_UserIdAndContest_ContestId(request.getUserId(),
+                request.getContestId());
         Set<Long> solvedQuestions = new HashSet<>();
 
         for (Submission sub : submissions) {
-            // Check if solved AND not already counted
             if ("AC".equals(sub.getVerdict()) && !solvedQuestions.contains(sub.getQuestion().getQuestionId())) {
-                dsaScore += sub.getQuestion().getMarks(); // Use question-specific marks
+                dsaScore += sub.getQuestion().getMarks();
                 solvedQuestions.add(sub.getQuestion().getQuestionId());
             }
         }
 
-        // 3. Save Result
         ContestResult result = new ContestResult();
         result.setContest(contestRepository.findById(request.getContestId()).get());
         result.setUser(userRepository.findById(request.getUserId()).get());

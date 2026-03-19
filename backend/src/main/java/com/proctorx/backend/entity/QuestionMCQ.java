@@ -46,4 +46,8 @@ public class QuestionMCQ {
     private String correctOption;
 
     private Integer marks = 2; // Default marks
+
+    @Column(name = "timer_sec", nullable = false)
+    private Integer timer = 60;
+
 }

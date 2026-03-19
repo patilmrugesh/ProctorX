@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.AllArgsConstructor;
-import com.fasterxml.jackson.annotation.JsonIgnore; // Import this!
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -44,18 +44,26 @@ public class Contest {
     @Column(name = "start_time")
     private LocalDateTime startTime;
 
+    // --- NEW: End Time for the overall contest window ---
+    @Column(name = "end_time")
+    private LocalDateTime endTime;
+
     @Column(name = "duration_minutes")
     private Integer durationMinutes;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt = LocalDateTime.now();
 
+    @Column(name = "timer_type")
+    private String timerType = "OVERALL"; // "OVERALL" or "PER_QUESTION"
+
+    @Column(name = "question_timer_seconds")
+    private Integer questionTimerSeconds;
+
     @ElementCollection
     @CollectionTable(name = "contest_allowed_emails", joinColumns = @JoinColumn(name = "contest_id"))
     @Column(name = "email")
     private List<String> allowedEmails = new ArrayList<>();
-
-    // --- FIX: Add @JsonIgnore to break the loop ---
 
     @OneToMany(mappedBy = "contest", cascade = CascadeType.ALL, orphanRemoval = true)
     @JsonIgnore

@@ -26,10 +26,15 @@ public class QuestionService {
     public QuestionDSA addDSAQuestion(Long contestId, QuestionDSA question) {
         Contest contest = contestRepository.findById(contestId)
                 .orElseThrow(() -> new RuntimeException("Contest not found"));
+
         question.setContest(contest);
+
         if (question.getMarks() == null) question.setMarks(5);
+        if (question.getTimer() == null) question.setTimer(60);
+
         return questionDSARepository.save(question);
     }
+
 
     public QuestionDSA updateDSAQuestion(Long questionId, QuestionDSA updated) {
         QuestionDSA existing = questionDSARepository.findById(questionId)
@@ -42,7 +47,10 @@ public class QuestionService {
         existing.setConstraints(updated.getConstraints());
         existing.setDifficulty(updated.getDifficulty());
 
-        if(updated.getTimeLimitSec() != null) existing.setTimeLimitSec(updated.getTimeLimitSec());
+        if (updated.getTimer() != null) {
+            existing.setTimer(updated.getTimer());
+        }
+
         if(updated.getMemoryLimitMb() != null) existing.setMemoryLimitMb(updated.getMemoryLimitMb());
         if(updated.getMarks() != null) existing.setMarks(updated.getMarks());
 
@@ -85,6 +93,9 @@ public class QuestionService {
             throw new RuntimeException("Correct option must be A, B, C, or D");
         }
         if (question.getMarks() == null) question.setMarks(2);
+        if (question.getTimer() == null) {
+            question.setTimer(60);
+        }
 
         question.setContest(contest);
         return questionMCQRepository.save(question);
@@ -101,6 +112,10 @@ public class QuestionService {
         existing.setOptionD(updated.getOptionD());
         existing.setCorrectOption(updated.getCorrectOption());
         existing.setMarks(updated.getMarks());
+        if (updated.getTimer() != null) {
+            existing.setTimer(updated.getTimer());
+        }
+
 
         return questionMCQRepository.save(existing);
     }

@@ -44,6 +44,10 @@ public class QuestionDSA {
     @Column(name = "time_limit_sec")
     private Double timeLimitSec = 600.0;
 
+    @Column(name = "timer_sec", nullable = false)
+    private Integer timer = 60;
+
+
     @Column(name = "memory_limit_mb")
     private Integer memoryLimitMb = 256;
 
