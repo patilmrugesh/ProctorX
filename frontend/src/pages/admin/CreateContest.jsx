@@ -13,8 +13,11 @@ const CreateContest = () => {
     title: '',
     description: '',
     type: 'DSA',
-    durationMinutes: 90
+    durationMinutes: 90,
+    timerType: 'OVERALL',
+    questionTimerSeconds: 20
   });
+
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -80,7 +83,7 @@ const CreateContest = () => {
             </div>
 
             <div className="form-col form-group">
-              <label>Duration (Minutes)</label>
+              <label>Overall Duration (Minutes)</label>
               <input
                 type="number"
                 required
@@ -90,9 +93,31 @@ const CreateContest = () => {
             </div>
           </div>
 
-          {/* <div className="warning-box">
-            ⚠️ Creating this contest will deduct <strong>1 Credit</strong> from your wallet.
-          </div> */}
+          <div className="form-row">
+            <div className="form-col form-group">
+              <label>Timer Mode</label>
+              <select
+                value={form.timerType}
+                onChange={(e) => setForm({ ...form, timerType: e.target.value })}
+                style={{width: '100%', padding: '12px', border: '1px solid #ddd', borderRadius: '8px'}}
+              >
+                <option value="OVERALL">Overall Timer</option>
+                <option value="PER_QUESTION">Per Question Timer</option>
+              </select>
+            </div>
+
+            {form.timerType === 'PER_QUESTION' && (
+              <div className="form-col form-group">
+                <label>Question Timer (Seconds)</label>
+                <input
+                  type="number"
+                  required
+                  value={form.questionTimerSeconds}
+                  onChange={(e) => setForm({ ...form, questionTimerSeconds: e.target.value })}
+                />
+              </div>
+            )}
+          </div>
 
           <div className="button-group">
             <button type="button" onClick={() => navigate('/admin/dashboard')} className="cancel-btn">

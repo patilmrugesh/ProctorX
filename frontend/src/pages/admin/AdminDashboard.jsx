@@ -8,8 +8,12 @@ const AdminDashboard = () => {
   // --- States ---
   const [contests, setContests] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [walletCredits, setWalletCredits] = useState(0); // State for live credits
+  const [walletCredits, setWalletCredits] = useState(0); 
   const [selectedContestId, setSelectedContestId] = useState(null);
+
+  // --- Settings Modal States ---
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [settingsForm, setSettingsForm] = useState({});
 
   // --- Hooks & Refs ---
   const navigate = useNavigate();
@@ -18,54 +22,31 @@ const AdminDashboard = () => {
 
   // --- Effects ---
   useEffect(() => {
-    // Basic Security Check
     if (!user.userId) {
       navigate('/login');
       return;
     }
-
-    // Parallel execution for better performance
     fetchContests();
     fetchWalletCredits();
   }, [user?.userId]);
 
   // --- Data Fetching Logic ---
-
-  /**
-   * Fetches the latest user data from Neon via the AuthController
-   * to ensure credits are always up-to-date.
-   */
-   const fetchWalletCredits = async () => {
-    // 1. Ensure we have a valid ID
+  const fetchWalletCredits = async () => {
     const userId = user.userId || user.id; 
-    
-    if (!userId) {
-        console.error("No User ID found in localStorage. Please log out and back in.");
-        return;
-    }
+    if (!userId) return;
 
     try {
-        // Use a leading slash to ensure it appends correctly to /api
         const res = await api.get(`/auth/user/${Number(userId)}`); 
-        
         if (res.data && res.data.walletCredits !== undefined) {
             setWalletCredits(res.data.walletCredits);
-            
-            // Sync back to local storage
             const updatedUser = { ...user, walletCredits: res.data.walletCredits };
             localStorage.setItem('user', JSON.stringify(updatedUser));
         }
     } catch (err) {
-        console.error("Refresh Error Status:", err.response?.status);
-        console.log("Attempted URL:", err.config?.url);
-        // Fallback to what we know
         setWalletCredits(user.walletCredits || 0);
     }
-};
+  };
 
-  /**
-   * Fetches all contests created by this admin
-   */
   const fetchContests = () => {
     if (user?.userId) {
       getAdminContests(user.userId)
@@ -85,7 +66,6 @@ const AdminDashboard = () => {
   };
 
   // --- Action Handlers ---
-
   const handleLogout = () => {
     localStorage.removeItem('user');
     navigate('/login');
@@ -105,20 +85,39 @@ const AdminDashboard = () => {
   const handleStatusToggle = async (contest) => {
     const newStatus = contest.status === 'LIVE' ? 'DRAFT' : 'LIVE';
     
-    // Warning for going live
-    if (newStatus === 'LIVE' && !window.confirm("Going LIVE will deduct 1 Token from your wallet. Continue?")) {
-        return;
+    // --- Token Calculation & Warning for going live ---
+    if (newStatus === 'LIVE') {
+        if (!contest.startTime || !contest.endTime) {
+            alert("Action Denied: You must click 'Settings' and set both 'Start Time' and 'End Time' before going LIVE.");
+            return;
+        }
+
+        const start = new Date(contest.startTime);
+        const end = new Date(contest.endTime);
+        const diffMins = (end - start) / (1000 * 60);
+
+        if (diffMins <= 0) {
+            alert("Action Denied: End Time must be strictly after Start Time.");
+            return;
+        }
+
+        const tokensRequired = Math.ceil(diffMins / 120);
+
+        if (!window.confirm(`Going LIVE for a window of ${Math.round(diffMins)} minutes will deduct ${tokensRequired} Token(s) from your wallet. Continue?`)) {
+            return;
+        }
     }
 
     try {
       await updateContestStatus(contest.contestId, newStatus);
       fetchContests();
-      fetchWalletCredits(); // Refresh credits after deduction
+      fetchWalletCredits(); 
     } catch (err) {
-      alert(err.response?.data || "Failed to update status");
+      alert(err.response?.data?.message || err.response?.data || "Failed to update status");
     }
   };
 
+  // --- File Upload Logic ---
   const handleUploadClick = (contestId) => {
     setSelectedContestId(contestId);
     fileInputRef.current.click();
@@ -146,12 +145,53 @@ const AdminDashboard = () => {
   };
 
   const handleTestContest = (token) => {
-      // Navigate to student dashboard with the token pre-filled
       navigate('/student/dashboard', { state: { autoToken: token } });
   };
 
-  // --- Render Logic ---
+  // --- Settings Modal Logic ---
+  const openSettingsModal = (contest) => {
+      // Format dates for the datetime-local input (YYYY-MM-DDTHH:mm)
+      const formatForInput = (dateString) => {
+          if (!dateString) return '';
+          return dateString.substring(0, 16); 
+      };
 
+      setSettingsForm({
+          ...contest,
+          startTime: formatForInput(contest.startTime),
+          endTime: formatForInput(contest.endTime),
+          durationMinutes: contest.durationMinutes || 60
+      });
+      setIsSettingsModalOpen(true);
+  };
+
+  const handleSettingsSubmit = async (e) => {
+      e.preventDefault();
+      try {
+          // Format dates to append seconds (:00) so Java's LocalDateTime parses them correctly
+          const formattedPayload = {
+              ...settingsForm,
+              startTime: settingsForm.startTime && settingsForm.startTime.length === 16 
+                  ? `${settingsForm.startTime}:00` 
+                  : settingsForm.startTime,
+              endTime: settingsForm.endTime && settingsForm.endTime.length === 16 
+                  ? `${settingsForm.endTime}:00` 
+                  : settingsForm.endTime,
+              durationMinutes: parseInt(settingsForm.durationMinutes, 10) || 60
+          };
+
+          // Sending updated settings back to the backend
+          await api.put(`/contests/${settingsForm.contestId}`, formattedPayload);
+          alert("Contest Settings Updated Successfully!");
+          setIsSettingsModalOpen(false);
+          fetchContests(); // Refresh list to show new data
+      } catch (err) {
+          console.error(err);
+          alert("Failed to update settings. Check backend logs.");
+      }
+  };
+
+  // --- Render Logic ---
   if (loading) return <div className="dashboard-container">Loading Dashboard...</div>;
 
   return (
@@ -217,7 +257,6 @@ const AdminDashboard = () => {
                 </div>
                 
                 <div style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
-                    {/* --- TEST BUTTON --- */}
                     <button 
                         className="action-btn"
                         style={{padding: '4px 8px', fontSize: '0.8rem', height: 'auto', color: '#3498db', borderColor: '#3498db'}}
@@ -242,6 +281,11 @@ const AdminDashboard = () => {
                 Status: <strong>{contest.status}</strong>
                 {contest.status === 'DRAFT' && <span style={{ fontSize: '0.7rem', marginLeft: '5px' }}>(Click dot to go Live)</span>}
               </div>
+              
+              <div style={{ marginBottom: '10px', fontSize: '0.8rem', color: '#888' }}>
+                Window: {contest.startTime ? new Date(contest.startTime).toLocaleString() : 'Not Set'} <br/>
+                To: {contest.endTime ? new Date(contest.endTime).toLocaleString() : 'Not Set'}
+              </div>
 
               <div className="token-box">
                 <div
@@ -264,7 +308,15 @@ const AdminDashboard = () => {
                 </div>
               </div>
 
-              <div className="card-actions">
+              <div className="card-actions" style={{ flexWrap: 'wrap' }}>
+                <button
+                  className="action-btn"
+                  style={{ color: '#f39c12', borderColor: '#f39c12' }}
+                  onClick={() => openSettingsModal(contest)}
+                >
+                  Settings
+                </button>
+
                 <button
                   className="action-btn"
                   style={{ color: 'blue', borderColor: 'blue' }}
@@ -289,6 +341,7 @@ const AdminDashboard = () => {
                 >
                   Users
                 </button>
+                
                 <button
                   className="action-btn"
                   style={{ color: '#e74c3c', borderColor: '#e74c3c' }}
@@ -301,6 +354,79 @@ const AdminDashboard = () => {
           ))
         )}
       </div>
+
+      {/* --- Settings Modal --- */}
+      {isSettingsModalOpen && (
+        <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000 }}>
+            <div className="modal-content" style={{ background: 'white', padding: '25px', borderRadius: '10px', width: '400px', maxWidth: '90%' }}>
+                <h3 style={{ marginTop: 0, color: '#2c3e50' }}>Contest Settings</h3>
+                <form onSubmit={handleSettingsSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                        <label style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Title</label>
+                        <input 
+                            required 
+                            type="text" 
+                            value={settingsForm.title || ''} 
+                            onChange={(e) => setSettingsForm({...settingsForm, title: e.target.value})}
+                            style={{ padding: '8px', borderRadius: '5px', border: '1px solid #ccc' }}
+                        />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                        <label style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Description</label>
+                        <textarea 
+                            value={settingsForm.description || ''} 
+                            onChange={(e) => setSettingsForm({...settingsForm, description: e.target.value})}
+                            style={{ padding: '8px', borderRadius: '5px', border: '1px solid #ccc', minHeight: '60px' }}
+                        />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                        <label style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Start Time (Window Open)</label>
+                        <input 
+                            required 
+                            type="datetime-local" 
+                            value={settingsForm.startTime || ''} 
+                            onChange={(e) => setSettingsForm({...settingsForm, startTime: e.target.value})}
+                            style={{ padding: '8px', borderRadius: '5px', border: '1px solid #ccc' }}
+                        />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                        <label style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>End Time (Window Close)</label>
+                        <input 
+                            required 
+                            type="datetime-local" 
+                            value={settingsForm.endTime || ''} 
+                            onChange={(e) => setSettingsForm({...settingsForm, endTime: e.target.value})}
+                            style={{ padding: '8px', borderRadius: '5px', border: '1px solid #ccc' }}
+                        />
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                        <label style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>Individual Duration (Minutes)</label>
+                        <input 
+                            required 
+                            type="number" 
+                            min="1"
+                            value={settingsForm.durationMinutes || ''} 
+                            onChange={(e) => setSettingsForm({...settingsForm, durationMinutes: e.target.value})}
+                            style={{ padding: '8px', borderRadius: '5px', border: '1px solid #ccc' }}
+                            placeholder="e.g. 60"
+                        />
+                        <span style={{ fontSize: '0.75rem', color: '#666' }}>Time given to a student once they start the exam.</span>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '10px', justifyContent: 'flex-end' }}>
+                        <button type="button" onClick={() => setIsSettingsModalOpen(false)} style={{ padding: '8px 16px', background: '#ecf0f1', border: 'none', borderRadius: '5px', cursor: 'pointer' }}>Cancel</button>
+                        <button type="submit" style={{ padding: '8px 16px', background: '#27ae60', color: 'white', border: 'none', borderRadius: '5px', cursor: 'pointer', fontWeight: 'bold' }}>Save Settings</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+      )}
+
     </div>
   );
 };

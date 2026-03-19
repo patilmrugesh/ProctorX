@@ -26,6 +26,7 @@
     top: -100px;
     right: -100px;
     border-radius: 50%;
+    pointer-events: none;
 }
 
 .welcome-banner h1 {

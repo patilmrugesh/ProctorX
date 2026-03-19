@@ -436,3 +436,32 @@
         width: 100%;
     }
 }
+
+/* Question state colors */
+.q-nav-btn.not-visited {
+    background: #e0e0e0;
+    color: #555;
+    border-color: #ccc;
+}
+
+.q-nav-btn.visited {
+    background: linear-gradient(135deg, #f1c40f 0%, #f39c12 100%);
+    color: #000;
+    border-color: #f39c12;
+    box-shadow: 0 2px 6px rgba(243, 156, 18, 0.3);
+}
+
+.q-nav-btn.submitted {
+    background: linear-gradient(135deg, #2ecc71 0%, #27ae60 100%);
+    color: white;
+    border-color: #27ae60;
+    box-shadow: 0 2px 6px rgba(39, 174, 96, 0.35);
+}
+
+/* Active question override */
+.q-nav-btn.active {
+    background: linear-gradient(135deg, #0366d6 0%, #0256c7 100%);
+    color: white;
+    border-color: #0366d6;
+    box-shadow: 0 2px 8px rgba(3, 102, 214, 0.4);
+}
