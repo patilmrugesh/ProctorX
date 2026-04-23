@@ -6,111 +6,73 @@ import Stomp from "stompjs";
 import "./ExamArena.css";
 
 const ExamArena = () => {
-  const [visitedQuestionIds, setVisitedQuestionIds] = useState(new Set());
-  const [examTimeLeft, setExamTimeLeft] = useState(null);
+  const [visitedQuestionIds, setVisitedQuestionIds]   = useState(new Set());
+  const [examTimeLeft, setExamTimeLeft]               = useState(null);
   const [submittedQuestionIds, setSubmittedQuestionIds] = useState(new Set());
-
-  // Store REMAINING time per question to persist during navigation
   const questionRemainingTimeRef = useRef({});
 
   const { contestId } = useParams();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const navigate      = useNavigate();
+  const location      = useLocation();
+  const user          = JSON.parse(localStorage.getItem("user")) || {};
+  const contest       = location.state?.contest || {};
 
-  const user = JSON.parse(localStorage.getItem("user")) || {};
-  const contest = location.state?.contest || {};
-
-  // --- Exam State ---
-  const [questions, setQuestions] = useState([]);
+  const [questions, setQuestions]         = useState([]);
   const [currentQIndex, setCurrentQIndex] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [loading, setLoading]             = useState(true);
+  const [isFullscreen, setIsFullscreen]   = useState(false);
 
-  // --- Question Timer & Locking State ---
-  const [qTimeLeft, setQTimeLeft] = useState(null);
+  const [qTimeLeft, setQTimeLeft]               = useState(null);
   const [lockedQuestionIds, setLockedQuestionIds] = useState(new Set());
 
-  // --- Warning/Judge Action State ---
-  const [warningCount, setWarningCount] = useState(0);
+  const [warningCount, setWarningCount]     = useState(0);
   const [warningMessage, setWarningMessage] = useState("");
 
-  // --- Coding State ---
-  const [code, setCode] = useState(
-    "# Write your Python code here...\n\nimport sys\n\n# Read input from stdin\ndata = sys.stdin.read().split()\n\n# Logic here\n"
-  );
+  const [code, setCode]       = useState("# Write your Python code here...\nimport sys\n\ndata = sys.stdin.read().split()\n\n# Logic here\n");
   const [language, setLanguage] = useState("PYTHON");
-  const [output, setOutput] = useState("");
+  const [output, setOutput]   = useState("");
   const [verdict, setVerdict] = useState("");
   const [isRunning, setIsRunning] = useState(false);
 
-  // --- MCQ State ---
   const [mcqAnswers, setMcqAnswers] = useState({});
 
-  // --- Refs ---
-  const stompClientRef = useRef(null);
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
+  const stompClientRef    = useRef(null);
+  const videoRef          = useRef(null);
+  const canvasRef         = useRef(null);
   const cameraIntervalRef = useRef(null);
 
-  // --- Helper: get the ID for a question regardless of type ---
   const getQId = useCallback((q) => {
     if (!q) return null;
     return q.qType === "DSA" ? q.questionId : q.mcqId;
   }, []);
 
-  // --- Overall Exam Timer Countdown ---
+  // Overall timer countdown
   useEffect(() => {
     if (examTimeLeft == null) return;
-    if (examTimeLeft <= 0) {
-      handleFinishExam(true); 
-      return;
-    }
-    const id = setInterval(() => {
-      setExamTimeLeft((t) => t - 1);
-    }, 1000);
+    if (examTimeLeft <= 0) { handleFinishExam(true); return; }
+    const id = setInterval(() => setExamTimeLeft(t => t - 1), 1000);
     return () => clearInterval(id);
   }, [examTimeLeft]);
 
-  // Initialize exam timer once from contest duration
   useEffect(() => {
-    if (contest?.durationMinutes && examTimeLeft == null) {
+    if (contest?.durationMinutes && examTimeLeft == null)
       setExamTimeLeft(contest.durationMinutes * 60);
-    }
   }, [contest, examTimeLeft]);
 
-  // --- Main Setup Effect ---
+  // Main setup
   useEffect(() => {
-    if (!user.userId) {
-      alert("Please login to take the exam.");
-      navigate("/login", { replace: true });
-      return;
-    }
-
-    fetchQuestions();
-    startWebcam();
+    if (!user.userId) { alert("Please login to take the exam."); navigate("/login", { replace: true }); return; }
+    fetchQuestions(); startWebcam();
 
     const socket = new SockJS(WS_URL || "http://localhost:8080/ws");
     const client = Stomp.over(socket);
     client.debug = null;
-
-    client.connect(
-      {},
-      () => {
-        stompClientRef.current = client;
-        sendAlert("ONLINE", "User joined the exam");
-
-        client.subscribe(
-          `/topic/contest/${contestId}/student/${user.userId}`,
-          (message) => {
-            const payload = JSON.parse(message.body);
-            handleJudgeAction(payload);
-          }
-        );
-
-        cameraIntervalRef.current = setInterval(captureAndSendFrame, 2000);
-      },
-      (error) => console.error("WS Error", error)
-    );
+    client.connect({}, () => {
+      stompClientRef.current = client;
+      sendAlert("ONLINE", "User joined the exam");
+      client.subscribe(`/topic/contest/${contestId}/student/${user.userId}`, (msg) => handleJudgeAction(JSON.parse(msg.body)));
+      cameraIntervalRef.current = setInterval(captureAndSendFrame, 2000);
+    }, err => console.error("WS Error", err));
 
     document.addEventListener("fullscreenchange", checkFullscreen);
     document.addEventListener("visibilitychange", handleTabSwitch);
@@ -118,572 +80,401 @@ const ExamArena = () => {
     return () => {
       document.removeEventListener("fullscreenchange", checkFullscreen);
       document.removeEventListener("visibilitychange", handleTabSwitch);
-
-      if (cameraIntervalRef.current) {
-        clearInterval(cameraIntervalRef.current);
-        cameraIntervalRef.current = null;
-      }
-
-      if (client && client.connected) {
-        if (user.userId) {
-          const payload = {
-            type: "OFFLINE",
-            userId: user.userId,
-            username: user.username,
-            contestId: contestId,
-            message: "User left the exam",
-          };
-          try {
-            client.send(
-              `/app/contest/${contestId}/alert`,
-              {},
-              JSON.stringify(payload)
-            );
-          } catch (e) {
-            console.error(e);
-          }
-        }
-        setTimeout(() => {
-          try {
-            client.disconnect();
-          } catch (e) {}
-        }, 500);
+      if (cameraIntervalRef.current) { clearInterval(cameraIntervalRef.current); cameraIntervalRef.current = null; }
+      if (client?.connected && user.userId) {
+        try { client.send(`/app/contest/${contestId}/alert`, {}, JSON.stringify({ type:"OFFLINE", userId:user.userId, username:user.username, contestId, message:"User left" })); } catch {}
+        setTimeout(() => { try { client.disconnect(); } catch {} }, 500);
       }
     };
   }, [contestId, navigate]);
 
-  // --- Per-Question Timer Initialization ---
+  // Per-Q timer init
   useEffect(() => {
     if (questions.length === 0) return;
-    const currentQ = questions[currentQIndex];
-    if (!currentQ) return;
-
+    const currentQ = questions[currentQIndex]; if (!currentQ) return;
     const qId = getQId(currentQ);
-
-    if (lockedQuestionIds.has(qId)) {
-      setQTimeLeft(null);
-      return;
-    }
-
+    if (lockedQuestionIds.has(qId)) { setQTimeLeft(null); return; }
     if (questionRemainingTimeRef.current[qId] == null) {
       const limit = currentQ.solveTime || (contest.timerType === 'PER_QUESTION' ? contest.questionTimerSeconds : null);
       questionRemainingTimeRef.current[qId] = limit ? Number(limit) : null;
     }
-
     setQTimeLeft(questionRemainingTimeRef.current[qId]);
   }, [currentQIndex, questions, lockedQuestionIds, getQId, contest.timerType, contest.questionTimerSeconds]);
 
-  // --- Per-Question Timer Countdown ---
+  // Per-Q timer countdown
   useEffect(() => {
     if (qTimeLeft === null) return;
-    if (qTimeLeft <= 0) {
-      handleQuestionTimeout();
-      return;
-    }
-
+    if (qTimeLeft <= 0) { handleQuestionTimeout(); return; }
     const timerId = setInterval(() => {
-      setQTimeLeft((t) => {
+      setQTimeLeft(t => {
         const newTime = t - 1;
-        if (questions.length > 0) {
-          const currentQ = questions[currentQIndex];
-          if (currentQ) {
-            const qId = getQId(currentQ);
-            questionRemainingTimeRef.current[qId] = newTime;
-          }
-        }
+        const q = questions[currentQIndex];
+        if (q) questionRemainingTimeRef.current[getQId(q)] = newTime;
         return newTime;
       });
     }, 1000);
-
     return () => clearInterval(timerId);
   }, [qTimeLeft, questions, currentQIndex, getQId]);
 
-  // --- Question Timeout Handler ---
   const handleQuestionTimeout = () => {
-    if (questions.length === 0) return;
-    const currentQ = questions[currentQIndex];
+    const currentQ = questions[currentQIndex]; if (!currentQ) return;
     const qId = getQId(currentQ);
-
-    setLockedQuestionIds((prev) => {
-      const newSet = new Set(prev);
-      newSet.add(qId);
-      return newSet;
-    });
-
+    setLockedQuestionIds(prev => new Set(prev).add(qId));
     setQTimeLeft(null);
-
-    if (currentQIndex < questions.length - 1) {
-      setCurrentQIndex((i) => i + 1);
-    }
+    if (currentQIndex < questions.length - 1) setCurrentQIndex(i => i + 1);
   };
 
   const handleJudgeAction = (action) => {
     if (action.type === "WARN") {
-      setWarningCount((prev) => {
-        const newCount = prev + 1;
-        if (newCount >= 3) {
-          terminateExam("You have exceeded 3 warnings. You are disqualified.");
-        } else {
-          setWarningMessage(
-            `WARNING ${newCount}/3: Please focus on the screen.`
-          );
-          setTimeout(() => setWarningMessage(""), 5000);
-        }
-        return newCount;
+      setWarningCount(prev => {
+        const next = prev + 1;
+        if (next >= 3) terminateExam("You've exceeded 3 warnings. Disqualified.");
+        else { setWarningMessage(`⚠️ Warning ${next}/3: Violation detected.`); setTimeout(() => setWarningMessage(""), 5000); }
+        return next;
       });
     } else if (action.type === "SUSPEND") {
       terminateExam("You have been suspended by the Proctor.");
     }
   };
 
-  const terminateExam = (reason) => {
-    alert(reason);
-    handleFinishExam(true);
-  };
+  const terminateExam = (reason) => { alert(reason); handleFinishExam(true); };
 
   const startWebcam = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { width: 160, height: 120 },
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 160, height: 120 } });
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play();
-        
-        await new Promise(resolve => {
-           if (videoRef.current.readyState >= 3) resolve();
-           else videoRef.current.oncanplay = resolve;
-        });
+        await new Promise(res => { if (videoRef.current.readyState >= 3) res(); else videoRef.current.oncanplay = res; });
       }
-    } catch (err) {
-      console.warn("Camera permission denied", err);
-      alert("Camera access is required. Please allow permission.");
-    }
+    } catch (err) { console.warn("Camera denied", err); alert("Camera access is required for this exam."); }
   };
 
   const captureAndSendFrame = () => {
-    if (!stompClientRef.current?.connected) return;
-    if (!videoRef.current || !canvasRef.current) return;
-
-    const video = videoRef.current;
-    const canvas = canvasRef.current;
-
-    if (video.paused || video.ended || video.videoWidth === 0 || video.readyState < 2) return;
-
+    if (!stompClientRef.current?.connected || !videoRef.current || !canvasRef.current) return;
+    const v = videoRef.current;
+    if (v.paused || v.ended || v.videoWidth === 0 || v.readyState < 2) return;
     try {
-        const ctx = canvas.getContext('2d');
-        canvas.width = 320;
-        canvas.height = 240;
-        ctx.drawImage(video, 0, 0, 320, 240);
-        
-        const imageBase64 = canvas.toDataURL('image/jpeg', 0.1);
-
-        stompClientRef.current.send(
-            `/app/contest/${contestId}/alert`,
-            {},
-            JSON.stringify({
-                type: 'CAMERA_FRAME',
-                userId: user.userId,
-                username: user.username,
-                contestId,
-                image: imageBase64
-            })
-        );
-    } catch (err) {
-        console.error("Frame capture error:", err);
-    }
+      const ctx = canvasRef.current.getContext('2d');
+      canvasRef.current.width = 320; canvasRef.current.height = 240;
+      ctx.drawImage(v, 0, 0, 320, 240);
+      stompClientRef.current.send(`/app/contest/${contestId}/alert`, {}, JSON.stringify({ type:'CAMERA_FRAME', userId:user.userId, username:user.username, contestId, image:canvasRef.current.toDataURL('image/jpeg', 0.1) }));
+    } catch {}
   };
 
   const sendAlert = (type, message) => {
     if (stompClientRef.current?.connected && user.userId) {
-      const payload = {
-        type: type,
-        userId: user.userId,
-        username: user.username,
-        contestId: contestId,
-        message: message,
-      };
-      try {
-        stompClientRef.current.send(
-          `/app/contest/${contestId}/alert`,
-          {},
-          JSON.stringify(payload)
-        );
-      } catch (e) {
-        console.error("Alert Error", e);
-      }
+      try { stompClientRef.current.send(`/app/contest/${contestId}/alert`, {}, JSON.stringify({ type, userId:user.userId, username:user.username, contestId, message })); } catch {}
     }
   };
 
-  const handleTabSwitch = () => {
-    if (document.hidden) {
-      sendAlert("TAB_SWITCH", "User switched tabs");
-    }
-  };
+  const handleTabSwitch    = () => { if (document.hidden) sendAlert("TAB_SWITCH", "User switched tabs"); };
+  const checkFullscreen    = () => { if (!document.fullscreenElement) { setIsFullscreen(false); sendAlert("FULLSCREEN_EXIT","Exited fullscreen"); } else setIsFullscreen(true); };
+  const enterFullscreen    = () => document.documentElement.requestFullscreen().catch(e => console.log(e));
 
   const handleFinishExam = async (force = false) => {
     if (!force && !confirm("Are you sure you want to submit?")) return;
-
     try {
-      const payload = {
-        userId: user.userId,
-        contestId: Number(contestId),
-        mcqAnswers: mcqAnswers,
-      };
-      await submitExam(payload);
+      await submitExam({ userId: user.userId, contestId: Number(contestId), mcqAnswers });
       alert("Exam Submitted Successfully!");
-      
-      // FIX: Added { replace: true } to prevent the back button glitch!
-      navigate("/student/dashboard", { replace: true });
-    } catch (err) {
-      alert("Submission End: " + (err.response?.data || "Completed"));
-      // FIX: Added { replace: true } to prevent the back button glitch!
-      navigate("/student/dashboard", { replace: true });
-    }
-  };
-
-  const checkFullscreen = () => {
-    if (!document.fullscreenElement) {
-      setIsFullscreen(false);
-      sendAlert("FULLSCREEN_EXIT", "User exited fullscreen");
-    } else {
-      setIsFullscreen(true);
-    }
-  };
-
-  const enterFullscreen = () => {
-    document.documentElement.requestFullscreen().catch((e) => console.log(e));
+    } catch (err) { alert("Submission: " + err); }
+    navigate("/student/dashboard", { replace: true });
   };
 
   const fetchQuestions = async () => {
     try {
-      const dsaRes = await api.get(`/questions/dsa/contest/${contestId}`);
-      const mcqRes = await api.get(`/questions/mcq/contest/${contestId}`);
-
+      const [dsaRes, mcqRes] = await Promise.all([
+        api.get(`/questions/dsa/contest/${contestId}`),
+        api.get(`/questions/mcq/contest/${contestId}`)
+      ]);
       const combined = [
-        ...(dsaRes.data || []).map((q) => ({ ...q, qType: "DSA" })),
-        ...(mcqRes.data || []).map((q) => ({
-          ...q,
-          qType: "MCQ",
-          title: "MCQ Question",
-          difficulty: "1 Mark",
-        })),
+        ...(dsaRes.data || []).map(q => ({ ...q, qType:"DSA" })),
+        ...(mcqRes.data || []).map(q => ({ ...q, qType:"MCQ", title:"MCQ Question", difficulty:"1 Mark" }))
       ];
       setQuestions(combined);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    } catch {} finally { setLoading(false); }
   };
 
   const handleLanguageChange = (e) => {
-    const lang = e.target.value;
-    setLanguage(lang);
-    if (lang === "PYTHON") {
-      setCode("# Python Solution\nimport sys\n\n# Read input\ndata = sys.stdin.read().split()\n# Logic here\n");
-    } else if (lang === "CPP") {
-      setCode("// C++ Solution\n#include <iostream>\nusing namespace std;\n\nint main() {\n    // code here\n    return 0;\n}");
-    }
+    const lang = e.target.value; setLanguage(lang);
+    if (lang === "PYTHON") setCode("# Python Solution\nimport sys\n\ndata = sys.stdin.read().split()\n# Logic here\n");
+    else if (lang === "CPP")  setCode("// C++ Solution\n#include <iostream>\nusing namespace std;\n\nint main() {\n    // code here\n    return 0;\n}");
   };
 
   const handleRunCode = async () => {
-    const currentQ = questions[currentQIndex];
-    if (!currentQ) return;
-
-    setIsRunning(true);
-    setOutput("Running test cases...");
-    setVerdict("");
-
-    const payload = {
-      code: code,
-      language: language,
-      questionId: Number(currentQ.questionId),
-      userId: Number(user.userId),
-      contestId: Number(contestId),
-    };
-
+    const currentQ = questions[currentQIndex]; if (!currentQ) return;
+    setIsRunning(true); setOutput("Running test cases…"); setVerdict("");
     try {
-      const res = await runCode(payload);
-      setVerdict(res.data.verdict);
-      setOutput(res.data.output);
+      const res = await runCode({ code, language, questionId: Number(currentQ.questionId), userId: Number(user.userId), contestId: Number(contestId) });
+      setVerdict(res.data.verdict); setOutput(res.data.output);
     } catch (err) {
       setVerdict("Error");
-      if (err.response && err.response.status === 400) {
-        setOutput("Bad Request: Data mismatch.");
-      } else {
-        setOutput("Server Error or Compilation Failed.");
-      }
-    } finally {
-      setIsRunning(false);
-    }
+      setOutput(err);
+    } finally { setIsRunning(false); }
   };
 
   const handleSubmitQuestion = async () => {
-    const currentQ = questions[currentQIndex];
-    if (!currentQ) return;
-
+    const currentQ = questions[currentQIndex]; if (!currentQ) return;
     const qId = getQId(currentQ);
-
     if (submittedQuestionIds.has(qId)) return;
-
-    if (currentQ.qType === "MCQ") {
-      const selectedAnswer = mcqAnswers[qId];
-      if (!selectedAnswer) {
-        alert("Please select an answer before submitting.");
-        return;
-      }
-    }
-
-    setSubmittedQuestionIds((prev) => {
-      const s = new Set(prev);
-      s.add(qId);
-      return s;
-    });
-    setLockedQuestionIds((prev) => {
-      const s = new Set(prev);
-      s.add(qId);
-      return s;
-    });
-    setQTimeLeft(null); 
-
-    sendAlert("QUESTION_SUBMITTED", `Submitted question ${qId}`);
-
-    if (contest.timerType === 'PER_QUESTION' && currentQIndex < questions.length - 1) {
-      setCurrentQIndex((i) => i + 1);
-    }
+    if (currentQ.qType === "MCQ" && !mcqAnswers[qId]) { alert("Please select an answer."); return; }
+    setSubmittedQuestionIds(prev => new Set(prev).add(qId));
+    setLockedQuestionIds(prev => new Set(prev).add(qId));
+    setQTimeLeft(null);
+    sendAlert("QUESTION_SUBMITTED", `Submitted Q${qId}`);
+    if (contest.timerType === 'PER_QUESTION' && currentQIndex < questions.length - 1)
+      setCurrentQIndex(i => i + 1);
   };
 
-  const handleMCQSelect = (option) => {
-    const currentQ = questions[currentQIndex];
-    if (!currentQ) return;
+  const handleMCQSelect = (opt) => {
+    const currentQ = questions[currentQIndex]; if (!currentQ) return;
     const qId = getQId(currentQ);
-    const isCurrentlyLocked = lockedQuestionIds.has(qId) || submittedQuestionIds.has(qId);
-    if (isCurrentlyLocked) return;
-
-    setMcqAnswers({ ...mcqAnswers, [qId]: option });
+    if (lockedQuestionIds.has(qId) || submittedQuestionIds.has(qId)) return;
+    setMcqAnswers({ ...mcqAnswers, [qId]: opt });
   };
-
-  if (loading) return <div>Loading...</div>;
-
-  if (questions.length === 0) {
-    return (
-      <div>
-        <p>No questions found.</p>
-        <button onClick={() => navigate("/student/dashboard", { replace: true })}>Return</button>
-      </div>
-    );
-  }
-
-  if (!isFullscreen) {
-    return (
-      <div className="fullscreen-overlay">
-        <h1>⚠️ Security Check</h1>
-        <p>This exam requires Fullscreen Mode.</p>
-        <button className="submit-exam-btn" onClick={enterFullscreen}>Enable Fullscreen</button>
-        
-        {/* Admin Emergency Exit from Fullscreen Blocker */}
-        {user.role === 'ADMIN' && (
-             <button 
-                onClick={() => navigate("/admin/dashboard", { replace: true })} 
-                style={{ marginTop: '20px', background: 'transparent', color: '#ccc', border: '1px solid #ccc', padding: '8px 16px', borderRadius: '5px', cursor: 'pointer' }}
-             >
-                Cancel Test (Return to Admin Panel)
-             </button>
-        )}
-      </div>
-    );
-  }
-
-  const currentQ = questions[currentQIndex];
-  if (!currentQ) return <div>Error loading question.</div>;
-
-  const currQId = getQId(currentQ);
-  const isSubmitted = submittedQuestionIds.has(currQId);
-  const isLocked = lockedQuestionIds.has(currQId) || isSubmitted;
 
   const formatTime = (s) => {
     if (s == null || s < 0) return "0:00";
-    const minutes = Math.floor(s / 60);
-    const seconds = s % 60;
-    return `${minutes}:${String(seconds).padStart(2, "0")}`;
+    return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+  };
+
+  if (loading) return <div className="arena-loading"><span className="spinner" /> Loading exam…</div>;
+
+  if (questions.length === 0) return (
+    <div className="arena-loading" style={{ flexDirection:'column', gap:16 }}>
+      <p style={{ color:'var(--text-secondary)' }}>No questions found for this contest.</p>
+      <button className="btn-primary" onClick={() => navigate("/student/dashboard", { replace:true })}>Return</button>
+    </div>
+  );
+
+  if (!isFullscreen) return (
+    <div className="fullscreen-gate">
+      <div className="gate-icon">🔒</div>
+      <div className="gate-title">Security Check Required</div>
+      <p className="gate-sub">This exam requires fullscreen mode to maintain integrity.<br />Please enable fullscreen to continue.</p>
+      <button id="enter-fullscreen-btn" className="btn-primary" onClick={enterFullscreen} style={{ padding:'14px 40px', fontSize:'1rem' }}>
+        🚀 Enable Fullscreen & Begin
+      </button>
+      {user.role === 'ADMIN' && (
+        <button className="btn-ghost" onClick={() => navigate("/admin/dashboard", { replace:true })} style={{ marginTop:16 }}>
+          Cancel Test — Return to Admin
+        </button>
+      )}
+    </div>
+  );
+
+  const currentQ   = questions[currentQIndex];
+  if (!currentQ) return <div className="arena-loading">Error loading question.</div>;
+
+  const currQId    = getQId(currentQ);
+  const isSubmitted = submittedQuestionIds.has(currQId);
+  const isLocked   = lockedQuestionIds.has(currQId) || isSubmitted;
+  const timerUrgent = (examTimeLeft != null && examTimeLeft < 120) || (qTimeLeft != null && qTimeLeft < 10);
+
+  const diffLabel = (d) => {
+    if (!d) return 'Medium';
+    const dl = d.toLowerCase();
+    if (dl === 'easy') return 'Easy';
+    if (dl === 'hard') return 'Hard';
+    return 'Medium';
   };
 
   return (
-    <div className="exam-container">
-      <video ref={videoRef} autoPlay muted style={{ display: "none" }} />
-      <canvas ref={canvasRef} width={320} height={240} style={{ display: "none" }} />
+    <div className="arena-container">
+      <video ref={videoRef} autoPlay muted style={{ display:"none" }} />
+      <canvas ref={canvasRef} width={320} height={240} style={{ display:"none" }} />
 
       {warningMessage && (
-        <div className="warning-modal">
-          <h3>⚠️ Warning</h3>
+        <div className="warn-modal">
+          <h3>⚠️ Violation Detected</h3>
           <p>{warningMessage}</p>
         </div>
       )}
 
-      <div className="exam-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-            <h3>ProctorX Exam Arena</h3>
-            
-            {/* FIX: Admin Return Button inside the Header */}
-            {user.role === 'ADMIN' && (
-                <button
-                    style={{ background: '#34495e', color: 'white', border: 'none', padding: '6px 12px', borderRadius: '5px', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold' }}
-                    onClick={() => {
-                        if (window.confirm("Exit test mode and return to Admin Dashboard?")) {
-                            navigate('/admin/dashboard', { replace: true });
-                        }
-                    }}
-                >
-                    ← Back to Admin Panel
-                </button>
-            )}
+      {/* Top bar */}
+      <div className="arena-topbar">
+        <div className="arena-brand">🛡️ ProctorX Exam</div>
+
+        <div style={{ flex:1, display:'flex', justifyContent:'center' }}>
+          <span style={{ color:'var(--text-secondary)', fontSize:'0.875rem', fontWeight:600 }}>
+            {contest.title}
+          </span>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <div className="timer-box">
-                {qTimeLeft !== null ? (
-                    <span style={{ 
-                        color: qTimeLeft <= 3 ? '#ff4d4d' : 'inherit',
-                        fontWeight: qTimeLeft <= 3 ? 'bold' : 'normal'
-                    }}>
-                        Q: {formatTime(qTimeLeft)}
-                    </span>
-                ) : (
-                    <span>Exam: {formatTime(examTimeLeft)}</span>
-                )}
-            </div>
+        <div className="arena-topbar-right">
+          {user.role === 'ADMIN' && (
+            <button className="btn-ghost" onClick={() => { if (window.confirm("Exit test mode?")) navigate('/admin/dashboard', { replace:true }); }}
+              style={{ fontSize:'0.8rem', padding:'6px 12px' }}>← Admin</button>
+          )}
 
-            <span style={{
-                background: warningCount > 0 ? "#e74c3c" : "#27ae60",
-                color: "white", padding: "6px 12px", borderRadius: "12px", fontSize: "0.8rem", fontWeight: 600
-            }}>
-              Warnings: {warningCount}/3
-            </span>
+          <div className={`exam-timer ${timerUrgent ? 'urgent' : ''}`}>
+            {qTimeLeft !== null
+              ? <><span style={{ fontSize:'0.72rem', opacity:0.7 }}>Q</span> {formatTime(qTimeLeft)}</>
+              : <><span style={{ fontSize:'0.72rem', opacity:0.7 }}>Exam</span> {formatTime(examTimeLeft)}</>
+            }
+          </div>
 
-            <button className="submit-exam-btn" onClick={() => handleFinishExam(false)}>Finish Exam</button>
+          <div className={`warning-chip ${warningCount > 0 ? 'flagged' : 'clear'}`}>
+            {warningCount > 0 ? '⚠️' : '✓'} {warningCount}/3
+          </div>
+
+          <button id="finish-exam-btn" className="btn-danger"
+            onClick={() => handleFinishExam(false)} style={{ padding:'7px 16px', fontSize:'0.82rem' }}>
+            Submit Exam
+          </button>
         </div>
       </div>
 
-      <div className="exam-body">
-        <div className="question-sidebar">
-          <div className="sidebar-header">Questions</div>
-          <div className="q-nav-grid">
+      {/* Body */}
+      <div className="arena-body">
+        {/* Question sidebar */}
+        <div className="q-sidebar">
+          <div className="q-sidebar-head">Questions ({questions.length})</div>
+          <div className="q-nav-list">
             {questions.map((q, idx) => {
-              const qId = getQId(q);
+              const qId     = getQId(q);
               const qLocked = lockedQuestionIds.has(qId) || submittedQuestionIds.has(qId);
-              const qVisited = visitedQuestionIds.has(qId);
-              let stateClass = "not-visited";
-              if (qLocked) stateClass = "submitted"; 
-              else if (qVisited) stateClass = "visited";
-
+              const qVisited= visitedQuestionIds.has(qId);
               const navDisabled = contest.timerType === 'PER_QUESTION' && idx !== currentQIndex;
-
+              let cls = '';
+              if (qLocked) cls = 'submitted';
+              else if (qVisited) cls = 'visited';
               return (
-                <button
-                  key={qId}
-                  className={`q-nav-btn ${stateClass} ${idx === currentQIndex ? "active" : ""}`}
+                <button key={qId} id={`q-nav-${idx+1}`}
+                  className={`q-nav-btn ${cls} ${idx === currentQIndex ? 'active' : ''}`}
                   disabled={navDisabled}
-                  style={navDisabled ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
-                  onClick={() => {
-                    setVisitedQuestionIds((prev) => new Set(prev).add(qId));
-                    setCurrentQIndex(idx);
-                  }}
+                  onClick={() => { setVisitedQuestionIds(prev => new Set(prev).add(getQId(questions[currentQIndex]))); setCurrentQIndex(idx); }}
                 >
-                  {idx + 1} {qLocked ? "🔒" : ""}
+                  <span className="q-nav-num">Q{idx+1}</span>
+                  <span style={{ fontSize:'0.72rem', opacity:0.7 }}>{q.qType}</span>
+                  {qLocked && <span>🔒</span>}
                 </button>
               );
             })}
           </div>
         </div>
 
-        <div className="problem-area">
-          {isLocked && (
-            <div style={{ background: "#fff3cd", border: "1px solid #ffc107", borderRadius: "6px", padding: "10px", marginBottom: "16px", color: "#856404" }}>
-              ⛔ This question is locked.
-            </div>
-          )}
-
-          {qTimeLeft !== null && (
-            <div style={{ marginBottom: "12px" }}>
-              <span className="badge" style={{
-                background: qTimeLeft <= 3 ? "#fadbd8" : "#d5f5e3",
-                color: qTimeLeft <= 3 ? "#e74c3c" : "#27ae60",
-                fontWeight: "bold",
-                transition: "all 0.3s ease"
-              }}>
-                {formatTime(qTimeLeft)} left
-              </span>
-            </div>
-          )}
-
-          <h2 className="problem-title">{currentQ.title || currentQ.questionText}</h2>
-
-          {currentQ.qType === "DSA" && (
-            <div className="problem-desc">
-              <p>{currentQ.problemStatement}</p>
-              {currentQ.inputFormat && <><h4>Input</h4><p>{currentQ.inputFormat}</p></>}
-              {currentQ.constraints && <><h4>Constraints</h4><p>{currentQ.constraints}</p></>}
-              {verdict && (
-                <div style={{ marginTop: "1.5rem" }}>
-                  <h4>Result</h4>
-                  <p>Verdict: <strong style={{ color: verdict === "AC" ? "#27ae60" : "#e74c3c" }}>{verdict}</strong></p>
-                  <pre style={{ background: "#f6f8fa", padding: "12px", borderRadius: "6px" }}>{output}</pre>
-                </div>
-              )}
-            </div>
-          )}
-
-          {currentQ.qType === "MCQ" && (
-            <>
-              <p className="problem-desc">{currentQ.questionText}</p>
-              <div className="mcq-options">
-                {["A", "B", "C", "D"].map((opt) => {
-                  const optKey = `option${opt}`;
-                  if (!currentQ[optKey]) return null;
-                  return (
-                    <button
-                      key={opt}
-                      className={`mcq-option ${mcqAnswers[currQId] === opt ? "selected" : ""}`}
-                      onClick={() => !isLocked && handleMCQSelect(opt)}
-                      disabled={isLocked}
-                    >
-                      <strong>{opt}.</strong> {currentQ[optKey]}
-                    </button>
-                  );
-                })}
+        {/* Problem pane */}
+        <div className="problem-pane">
+          <div className="problem-scroll">
+            {isLocked && (
+              <div className="locked-banner">
+                ⛔ This question has been locked — no further changes allowed.
               </div>
-              <button
-                className="submit-code-btn"
-                disabled={isSubmitted || isLocked}
-                onClick={handleSubmitQuestion}
-                style={{ marginTop: "24px", opacity: isSubmitted || isLocked ? 0.5 : 1, cursor: isSubmitted || isLocked ? "not-allowed" : "pointer" }}
-              >
-                {isSubmitted ? "✓ Submitted" : "Submit Answer"}
-              </button>
-            </>
-          )}
+            )}
+            {qTimeLeft !== null && (
+              <div className={`q-timer-bar ${qTimeLeft <= 10 ? 'urgent' : ''}`}>
+                ⏱ {formatTime(qTimeLeft)} remaining
+              </div>
+            )}
+
+            <div className="problem-meta">
+              <span className="badge badge-primary">{currentQ.qType}</span>
+              {currentQ.difficulty && (
+                <span className={`badge ${
+                  diffLabel(currentQ.difficulty) === 'Easy' ? 'badge-success'
+                  : diffLabel(currentQ.difficulty) === 'Hard' ? 'badge-danger'
+                  : 'badge-warning'
+                }`}>{currentQ.difficulty}</span>
+              )}
+              {currentQ.marks && <span className="badge badge-accent">{currentQ.marks} pts</span>}
+            </div>
+
+            <h2 className="problem-title">{currentQ.title || currentQ.questionText}</h2>
+
+            {currentQ.qType === "DSA" && (
+              <>
+                <div className="problem-section">
+                  <p className="problem-body">{currentQ.problemStatement}</p>
+                </div>
+                {currentQ.inputFormat && (
+                  <div className="problem-section">
+                    <h4>Input Format</h4>
+                    <p className="problem-body">{currentQ.inputFormat}</p>
+                  </div>
+                )}
+                {currentQ.constraints && (
+                  <div className="problem-section">
+                    <h4>Constraints</h4>
+                    <p className="problem-body">{currentQ.constraints}</p>
+                  </div>
+                )}
+                {verdict && (
+                  <div className="verdict-box">
+                    <h4>Result</h4>
+                    <div className={`verdict-status ${verdict === 'AC' ? 'ac' : 'wa'}`}>
+                      {verdict === 'AC' ? '✅ Accepted' : `❌ ${verdict}`}
+                    </div>
+                    <div className="verdict-output">{output}</div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {currentQ.qType === "MCQ" && (
+              <>
+                <p className="problem-body" style={{ marginBottom:24 }}>{currentQ.questionText}</p>
+                <div className="mcq-list">
+                  {['A','B','C','D'].map(opt => {
+                    const key = `option${opt}`;
+                    if (!currentQ[key]) return null;
+                    const selected = mcqAnswers[currQId] === opt;
+                    return (
+                      <button key={opt} id={`mcq-opt-${opt}`}
+                        className={`mcq-opt ${selected ? 'selected' : ''}`}
+                        onClick={() => !isLocked && handleMCQSelect(opt)}
+                        disabled={isLocked}
+                      >
+                        <span className="opt-letter">{opt}</span>
+                        {currentQ[key]}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button id="submit-mcq-btn"
+                  className="btn-primary"
+                  disabled={isSubmitted || isLocked}
+                  onClick={handleSubmitQuestion}
+                  style={{ marginTop:24, width:'100%', padding:14, opacity: isSubmitted||isLocked ? 0.45 : 1 }}
+                >
+                  {isSubmitted ? '✓ Answer Submitted' : 'Submit Answer'}
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
+        {/* Code editor pane – only for DSA */}
         {currentQ.qType === "DSA" && (
-          <div className="answer-area">
-            <textarea
-              className="code-editor"
-              value={code}
-              onChange={(e) => !isLocked && setCode(e.target.value)}
-              readOnly={isLocked}
-              style={{ opacity: isLocked ? 0.6 : 1 }}
-            />
-            <div className="editor-footer">
-              <select value={language} onChange={handleLanguageChange} disabled={isLocked} style={{ marginRight: "auto", opacity: isLocked ? 0.5 : 1 }}>
+          <div className="code-pane">
+            <div className="code-pane-head">
+              <span style={{ fontSize:'0.8rem', fontWeight:600, color:'var(--text-secondary)' }}>Code Editor</span>
+              <select id="language-select" className="field-input" value={language} onChange={handleLanguageChange}
+                disabled={isLocked} style={{ width:'auto', padding:'5px 10px', fontSize:'0.82rem' }}>
                 <option value="PYTHON">Python</option>
                 <option value="CPP">C++</option>
               </select>
-              <button className="run-btn" onClick={handleRunCode} disabled={isRunning || isLocked}>
-                {isRunning ? "Running..." : "▶ Run"}
+            </div>
+            <div className="editor-area">
+              <textarea
+                id="code-editor"
+                className="code-editor"
+                value={code}
+                onChange={e => !isLocked && setCode(e.target.value)}
+                readOnly={isLocked}
+                style={{ opacity: isLocked ? 0.55 : 1 }}
+                spellCheck={false}
+              />
+            </div>
+            <div className="code-footer">
+              <button id="run-code-btn" className="btn-ghost" onClick={handleRunCode}
+                disabled={isRunning || isLocked}
+                style={{ fontSize:'0.82rem', padding:'8px 18px', opacity: isRunning||isLocked ? 0.5 : 1 }}>
+                {isRunning ? <><span className="spinner" style={{ width:14, height:14 }} /> Running…</> : '▶ Run Code'}
               </button>
-              <button className="submit-code-btn" disabled={isSubmitted || isLocked} onClick={handleSubmitQuestion} style={{ opacity: isSubmitted || isLocked ? 0.5 : 1 }}>
-                {isSubmitted ? "✓ Submitted" : "Submit"}
+              <button id="submit-code-btn" className="btn-primary" disabled={isSubmitted || isLocked} onClick={handleSubmitQuestion}
+                style={{ fontSize:'0.82rem', padding:'8px 20px', opacity: isSubmitted||isLocked ? 0.45 : 1 }}>
+                {isSubmitted ? '✓ Submitted' : 'Submit →'}
               </button>
             </div>
           </div>

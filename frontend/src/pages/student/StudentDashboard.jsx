@@ -4,241 +4,192 @@ import { joinContest, joinJudge } from "../../services/api";
 import "./StudentDashboard.css";
 
 const StudentDashboard = () => {
-  const [token, setToken] = useState("");
+  const [token, setToken]           = useState("");
   const [judgeToken, setJudgeToken] = useState("");
-  const [contest, setContest] = useState(null);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [contest, setContest]       = useState(null);
+  const [error, setError]           = useState("");
+  const [loading, setLoading]       = useState(false);
 
-  const navigate = useNavigate();
-  const location = useLocation(); // Hook to access state passed from Admin
-  const user = JSON.parse(localStorage.getItem("user"));
+  const navigate  = useNavigate();
+  const location  = useLocation();
+  const user      = JSON.parse(localStorage.getItem("user"));
 
-  // --- Check for Auto-Fill Token ---
   useEffect(() => {
-    if (location.state?.autoToken) {
-      setToken(location.state.autoToken);
-    }
+    if (location.state?.autoToken) setToken(location.state.autoToken);
   }, [location.state]);
 
-  const handleLogout = () => {
-    localStorage.removeItem("user");
-    navigate("/login");
-  };
+  const handleLogout = () => { localStorage.removeItem("user"); navigate("/login"); };
 
   const handleJoin = async (e) => {
     e.preventDefault();
     if (!token) return;
-
-    setLoading(true);
-    setError("");
-    setContest(null);
-
+    setLoading(true); setError(""); setContest(null);
     try {
-      const response = await joinContest(token, user.email);
-      setContest(response.data);
+      const res = await joinContest(token, user.email);
+      setContest(res.data);
     } catch (err) {
-      setError(err.response?.data || "Invalid Token or Access Denied.");
-    } finally {
-      setLoading(false);
-    }
+      setError(err);
+    } finally { setLoading(false); }
   };
 
   const handleJudgeJoin = async (e) => {
     e.preventDefault();
     if (!judgeToken) return;
-
     try {
-      const response = await joinJudge(judgeToken);
-      navigate(`/judge/monitor/${response.data.contestId}`, {
-        state: { contest: response.data },
-      });
+      const res = await joinJudge(judgeToken);
+      navigate(`/judge/monitor/${res.data.contestId}`, { state: { contest: res.data } });
     } catch (err) {
-      alert(err.response?.data || "Invalid Judge Token or Contest not Active");
+      alert(err);
     }
   };
 
-  const handleStartExam = () => {
-    navigate(`/exam/${contest.contestId}`, { state: { contest } });
-  };
+  const handleStartExam = () => navigate(`/exam/${contest.contestId}`, { state: { contest } });
+
+  const initials = (name) => name ? name.slice(0,2).toUpperCase() : 'ST';
 
   return (
-    <div className="student-container">
-      <div className="welcome-banner">
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "start",
-          }}
-        >
-          <div>
-            <h1>Welcome, {user?.username}</h1>
-            <p>Ready to prove your skills? Enter your exam token below.</p>
-          </div>
-          <button
-            onClick={handleLogout}
-            style={{
-              position: "relative",
-              zIndex: 10,
-              background: "rgba(255,255,255,0.2)",
-              border: "1px solid rgba(255,255,255,0.4)",
-              color: "white",
-              padding: "8px 16px",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600",
-            }}
-          >
-            Logout
-          </button>
-          {user.role === "ADMIN" && (
-            <button
-              style={{
-                position: "relative",
-              zIndex: 10,
-              background: "rgba(255,255,255,0.2)",
-              border: "1px solid rgba(255,255,255,0.4)",
-              color: "white",
-              padding: "8px 16px",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontWeight: "600",
-              }}
-              onClick={() => navigate("/admin/dashboard", { replace: true })}
-            >
-              ← Back to Admin Panel
+    <div className="student-page">
+      {/* Navbar */}
+      <nav className="student-nav">
+        <div className="student-nav-brand">🛡️ ProctorX</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {user?.role === 'ADMIN' && (
+            <button className="btn btn-ghost" onClick={() => navigate('/admin/dashboard', { replace: true })}
+              style={{ fontSize: '0.82rem', padding: '7px 14px' }}>
+              ← Admin Panel
             </button>
           )}
-        </div>
-      </div>
-
-      <div className="join-section">
-        <h3>Join an Assessment</h3>
-        <p style={{ color: "#666", marginBottom: "1rem" }}>
-          Ask your administrator for the unique Student Token.
-        </p>
-
-        <form onSubmit={handleJoin}>
-          <div className="token-input-group">
-            <input
-              type="text"
-              className="token-input"
-              placeholder="TOKEN"
-              maxLength="6"
-              value={token}
-              onChange={(e) => setToken(e.target.value.toUpperCase())}
-            />
-            <button type="submit" className="join-btn" disabled={loading}>
-              {loading ? "..." : "Verify"}
-            </button>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '6px 14px', background: 'var(--bg-glass)',
+            border: '1px solid var(--border-subtle)', borderRadius: 30,
+            fontSize: '0.85rem', color: 'var(--text-secondary)'
+          }}>
+            <div style={{
+              width: 28, height: 28, borderRadius: '50%',
+              background: 'var(--grad-accent)', display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+              fontSize: '0.75rem', fontWeight: 700, color: '#fff'
+            }}>{initials(user?.username)}</div>
+            {user?.username}
           </div>
-        </form>
-
-        {error && (
-          <p style={{ color: "red", marginTop: "1rem", fontWeight: "bold" }}>
-            {error}
-          </p>
-        )}
-
-        {contest && (
-          <div className="contest-details">
-            <h2
-              style={{ borderBottom: "1px solid #eee", paddingBottom: "10px" }}
-            >
-              {contest.title}
-            </h2>
-
-            <div className="details-grid">
-              <div className="detail-item">
-                <label>Type</label>
-                <p>{contest.type}</p>
-              </div>
-              <div className="detail-item">
-                <label>Duration</label>
-                <p>{contest.durationMinutes} Mins</p>
-              </div>
-              <div className="detail-item">
-                <label>Status</label>
-                <p
-                  style={{
-                    color: contest.status === "LIVE" ? "green" : "orange",
-                    fontWeight: "bold",
-                  }}
-                >
-                  {contest.status}
-                </p>
-              </div>
-            </div>
-
-            <p style={{ marginBottom: "1rem", color: "#555" }}>
-              {contest.description}
-            </p>
-
-            <div
-              style={{
-                background: "#fff3cd",
-                padding: "10px",
-                borderRadius: "4px",
-                fontSize: "0.9rem",
-                marginBottom: "1rem",
-              }}
-            >
-              ⚠️ <strong>Warning:</strong> Fullscreen mode is enforced. Tab
-              switching is monitored.
-            </div>
-
-            <button className="start-btn" onClick={handleStartExam}>
-              Start Exam Now
-            </button>
-          </div>
-        )}
-      </div>
-
-      <div
-        style={{
-          marginTop: "3rem",
-          textAlign: "center",
-          borderTop: "1px solid #ddd",
-          paddingTop: "2rem",
-        }}
-      >
-        <h4 style={{ color: "#666" }}>Are you a Judge?</h4>
-        <form
-          onSubmit={handleJudgeJoin}
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            gap: "10px",
-            marginTop: "1rem",
-          }}
-        >
-          <input
-            type="text"
-            placeholder="JUDGE TOKEN"
-            style={{
-              padding: "8px",
-              borderRadius: "4px",
-              border: "1px solid #ccc",
-            }}
-            value={judgeToken}
-            onChange={(e) => setJudgeToken(e.target.value.toUpperCase())}
-          />
-          <button
-            type="submit"
-            style={{
-              padding: "8px 16px",
-              background: "#2c3e50",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}
-          >
-            Join as Judge
+          <button id="student-logout-btn" className="btn btn-danger" onClick={handleLogout}
+            style={{ padding: '7px 16px', fontSize: '0.82rem' }}>
+            Sign Out
           </button>
-        </form>
-      </div>
+        </div>
+      </nav>
+
+      <main className="student-content">
+        {/* Welcome */}
+        <div className="welcome-hero">
+          <h1>Welcome back, {user?.username} 👋</h1>
+          <p>Ready to prove your skills? Enter your exam token to get started.</p>
+        </div>
+
+        {/* Join Assessment */}
+        <div className="join-card">
+          <h2>🎯 Join an Assessment</h2>
+          <p className="hint">Ask your administrator for the 6-character token.</p>
+
+          <form onSubmit={handleJoin}>
+            <div className="token-input-row">
+              <input
+                id="token-input"
+                className="token-input"
+                type="text"
+                placeholder="TOKEN"
+                maxLength="6"
+                value={token}
+                onChange={e => setToken(e.target.value.toUpperCase())}
+                autoComplete="off"
+              />
+              <button id="verify-token-btn" type="submit" className="btn btn-primary"
+                disabled={loading || !token}
+                style={{ padding: '14px 28px', fontSize: '0.9rem', minWidth: 110, flexShrink: 0 }}>
+                {loading
+                  ? <span style={{ display:'flex', alignItems:'center', gap:8 }}><span className="spinner" /></span>
+                  : 'Verify →'
+                }
+              </button>
+            </div>
+          </form>
+
+          {error && (
+            <div className="alert-error" style={{ marginTop: 16 }}>⚠ {error}</div>
+          )}
+
+          {contest && (
+            <div className="contest-reveal">
+              <h3>📋 {contest.title}</h3>
+
+              <div className="contest-meta-grid">
+                <div className="contest-meta-item">
+                  <label>Type</label>
+                  <p><span className="badge badge-primary">{contest.type}</span></p>
+                </div>
+                <div className="contest-meta-item">
+                  <label>Duration</label>
+                  <p>{contest.durationMinutes} mins</p>
+                </div>
+                <div className="contest-meta-item">
+                  <label>Status</label>
+                  <p>
+                    <span className={`badge ${contest.status === 'LIVE' ? 'badge-success' : 'badge-warning'}`}>
+                      {contest.status === 'LIVE' && <span className="live-dot" style={{width:6,height:6}} />}
+                      {contest.status}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              {contest.description && (
+                <p style={{ fontSize:'0.88rem', color:'var(--text-2)', marginBottom:16, lineHeight:1.6 }}>
+                  {contest.description}
+                </p>
+              )}
+
+              <div className="warning-notice">
+                ⚠️ <strong>Important:</strong> Fullscreen mode is enforced. Switching tabs or exiting fullscreen will be flagged as a violation.
+              </div>
+
+              {contest.status === 'LIVE' ? (
+                <button id="start-exam-btn" className="btn btn-primary" onClick={handleStartExam}
+                  style={{ width: '100%', padding: 16, fontSize: '1rem', fontWeight: 700 }}>
+                  🚀 Enter Exam Arena
+                </button>
+              ) : (
+                <div className="alert-error">
+                  This contest is not LIVE yet. Contact your administrator.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Judge section */}
+        <div className="judge-card">
+          <div className="judge-icon">⚖️</div>
+          <div className="judge-card-text">
+            <h4>Are you a Judge / Proctor?</h4>
+            <p>Enter your judge token to access the monitoring panel</p>
+          </div>
+          <form onSubmit={handleJudgeJoin} className="judge-inputs">
+            <input
+              id="judge-token-input"
+              className="judge-token-input"
+              type="text"
+              placeholder="JUDGE TOKEN"
+              value={judgeToken}
+              onChange={e => setJudgeToken(e.target.value.toUpperCase())}
+            />
+            <button id="judge-join-btn" type="submit" className="btn btn-primary"
+              style={{ padding: '11px 20px', fontSize: '0.855rem', flexShrink: 0 }}>
+              Monitor →
+            </button>
+          </form>
+        </div>
+      </main>
     </div>
   );
 };

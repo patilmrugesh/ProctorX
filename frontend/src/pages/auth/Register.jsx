@@ -1,113 +1,122 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { registerUser } from '../../services/api';
-import './Register.css'; // Separate CSS
+import './Register.css';
 
 const Register = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  
+  const [error, setError]     = useState('');
+  const [success, setSuccess] = useState(false);
+
   const [formData, setFormData] = useState({
-    username: '',
-    email: '',
-    passwordHash: '', // Backend expects 'passwordHash'
-    role: 'STUDENT', // Default
-    city: '',
-    gender: 'Male',
-    phone: ''
+    username: '', email: '', passwordHash: '',
+    role: 'STUDENT', city: '', gender: 'Male', phone: ''
   });
 
-  const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
-  };
-
-  const handleRoleSelect = (role) => {
-    setFormData({ ...formData, role });
-  };
+  const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
+  const handleRole   = (role) => setFormData({ ...formData, role });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
-
+    setLoading(true); setError('');
     try {
       await registerUser(formData);
-      alert("Registration Successful! Please Login.");
-      navigate('/login');
+      setSuccess(true);
+      setTimeout(() => navigate('/login'), 1800);
     } catch (err) {
-      console.error(err);
-      setError(err.response?.data || 'Registration failed. Try a different email.');
-    } finally {
-      setLoading(false);
-    }
+      setError(err);
+    } finally { setLoading(false); }
   };
 
   return (
-    <div className="register-container">
-      <div className="register-card">
-        <h2 className="register-title">Create Account</h2>
-        <p className="register-subtitle">Join ProctorX to host or take exams</p>
+    <div className="register-page">
+      {/* decorative orbs */}
+      <div className="orb1" />
+      <div className="orb2" />
 
-        {error && <div className="error-alert">{error}</div>}
+      <div className="reg-card">
+        {/* Logo */}
+        <div className="reg-logo">
+          <div className="reg-logo-icon">🛡️</div>
+          <h1>Join ProctorX</h1>
+          <p>Create your account to get started</p>
+        </div>
 
-        <form onSubmit={handleSubmit}>
-          {/* Role Selection */}
-          <div className="role-select-group">
-            <div 
-                className={`role-option ${formData.role === 'STUDENT' ? 'active' : ''}`}
-                onClick={() => handleRoleSelect('STUDENT')}
-            >
-                Student
+        {error   && <div className="alert-error"   style={{ marginBottom:16 }}>⚠️ {error}</div>}
+        {success && <div className="alert-success" style={{ marginBottom:16 }}>✅ Account created! Redirecting to login…</div>}
+
+        <form onSubmit={handleSubmit} className="reg-form">
+          {/* Role selector */}
+          <div className="field-group">
+            <label className="field-label">I am a</label>
+            <div className="role-tabs">
+              <button type="button" id="role-student-btn"
+                className={`role-tab ${formData.role === 'STUDENT' ? 'active' : ''}`}
+                onClick={() => handleRole('STUDENT')}>
+                🎓 Student
+              </button>
+              <button type="button" id="role-admin-btn"
+                className={`role-tab ${formData.role === 'ADMIN' ? 'active' : ''}`}
+                onClick={() => handleRole('ADMIN')}>
+                ⚙️ Admin
+              </button>
             </div>
-            <div 
-                className={`role-option ${formData.role === 'ADMIN' ? 'active' : ''}`}
-                onClick={() => handleRoleSelect('ADMIN')}
-            >
-                Admin (Organizer)
-            </div>
           </div>
 
-          <div className="form-group">
-            <label>Full Name</label>
-            <input required type="text" name="username" placeholder="John Doe" onChange={handleChange} />
+          {/* Name */}
+          <div className="field-group">
+            <label className="field-label" htmlFor="reg-name">Full Name</label>
+            <input id="reg-name" className="field-input" required type="text"
+              name="username" placeholder="John Doe" onChange={handleChange} />
           </div>
 
-          <div className="form-group">
-            <label>Email Address</label>
-            <input required type="email" name="email" placeholder="john@example.com" onChange={handleChange} />
+          {/* Email */}
+          <div className="field-group">
+            <label className="field-label" htmlFor="reg-email">Email Address</label>
+            <input id="reg-email" className="field-input" required type="email"
+              name="email" placeholder="john@example.com" onChange={handleChange} />
           </div>
 
-          <div className="form-group">
-            <label>Password</label>
-            <input required type="password" name="passwordHash" placeholder="••••••••" onChange={handleChange} />
+          {/* Password */}
+          <div className="field-group">
+            <label className="field-label" htmlFor="reg-password">Password</label>
+            <input id="reg-password" className="field-input" required type="password"
+              name="passwordHash" placeholder="Min. 8 characters" onChange={handleChange} />
           </div>
 
-          {/* Extra Fields for Students */}
+          {/* Student-only extras */}
           {formData.role === 'STUDENT' && (
-            <div className="form-row-split">
-                <div className="form-group">
-                    <label>City</label>
-                    <input required type="text" name="city" placeholder="Nagpur" onChange={handleChange} />
-                </div>
-                <div className="form-group">
-                    <label>Gender</label>
-                    <select name="gender" onChange={handleChange} style={{width: '100%', padding: '12px', border: '1px solid #ddd', borderRadius: '8px'}}>
-                        <option>Male</option>
-                        <option>Female</option>
-                        <option>Other</option>
-                    </select>
-                </div>
+            <div className="form-row">
+              <div className="field-group">
+                <label className="field-label" htmlFor="reg-city">City</label>
+                <input id="reg-city" className="field-input" required type="text"
+                  name="city" placeholder="Nagpur" onChange={handleChange} />
+              </div>
+              <div className="field-group">
+                <label className="field-label" htmlFor="reg-gender">Gender</label>
+                <select id="reg-gender" className="field-input" name="gender" onChange={handleChange}>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
             </div>
           )}
 
-          <button type="submit" className="login-btn" disabled={loading}>
-            {loading ? 'Creating Account...' : 'Register Now'}
+          <button id="register-submit-btn" type="submit"
+            className="btn btn-primary" disabled={loading || success}
+            style={{ width:'100%', padding:'14px', fontSize:'0.95rem', marginTop:6 }}>
+            {loading
+              ? <><span className="spinner" />  Creating account…</>
+              : 'Create Account →'
+            }
           </button>
         </form>
 
-        <div className="register-link">
-            Already have an account? <Link to="/login">Login here</Link>
+        <div className="reg-footer">
+          Already have an account?{' '}
+          <Link to="/login">Sign in →</Link>
         </div>
       </div>
     </div>

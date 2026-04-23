@@ -10,6 +10,37 @@ const api = axios.create({
     headers: { 'Content-Type': 'application/json' },
 });
 
+// Add a response interceptor to extract error messages
+api.interceptors.response.use(
+    (response) => response,
+    (error) => {
+        let message = 'An unexpected error occurred';
+        
+        if (error.response) {
+            // The server responded with a status code outside the 2xx range
+            const data = error.response.data;
+            if (typeof data === 'string') {
+                message = data;
+            } else if (data && data.message) {
+                message = data.message;
+            } else if (data && data.error) {
+                message = data.error;
+            } else if (data && typeof data === 'object') {
+                // If it's the Spring Boot default error object
+                message = data.message || data.error || JSON.stringify(data);
+            }
+        } else if (error.request) {
+            // The request was made but no response was received
+            message = 'No response from server. Please check if the backend is running.';
+        } else {
+            // Something happened in setting up the request
+            message = error.message;
+        }
+
+        return Promise.reject(message);
+    }
+);
+
 export const loginUser = (credentials) => api.post('/auth/login', credentials);
 export const registerUser = (userData) => api.post('/auth/register', userData);
 

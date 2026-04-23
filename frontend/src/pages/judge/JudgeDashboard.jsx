@@ -5,183 +5,161 @@ import Stomp from 'stompjs';
 import './JudgeDashboard.css';
 
 const JudgeDashboard = () => {
-  const { state } = useLocation();
-  const { contestId } = useParams();
-  const navigate = useNavigate();
-  const contest = state?.contest;
+  const { state }    = useLocation();
+  const { contestId }= useParams();
+  const navigate     = useNavigate();
+  const contest      = state?.contest;
 
-  const [students, setStudents] = useState([]); 
-  const [menuPos, setMenuPos] = useState({ x: 0, y: 0, visible: false, studentId: null });
-  
-  // Ref to hold the active socket client for sending actions
+  const [students, setStudents] = useState([]);
+  const [menuPos, setMenuPos]   = useState({ x: 0, y: 0, visible: false, studentId: null });
   const stompClientRef = useRef(null);
 
   useEffect(() => {
-    // Redirect if accessed directly without context
-    if (!contest) {
-        navigate('/student/dashboard');
-        return;
-    }
+    if (!contest) { navigate('/student/dashboard'); return; }
 
     const socket = new SockJS('http://localhost:8080/ws');
-    const stompClient = Stomp.over(socket);
-    
-    // Disable debug logs to keep console clean
-    stompClient.debug = null; 
+    const client = Stomp.over(socket);
+    client.debug = null;
 
-    stompClient.connect({}, () => {
-        stompClientRef.current = stompClient;
+    client.connect({}, () => {
+      stompClientRef.current = client;
+      client.subscribe(`/topic/contest/${contestId}/judge`, (message) => {
+        handleIncomingEvent(JSON.parse(message.body));
+      });
+    }, err => console.log("WS Error:", err));
 
-        // Subscribe to this contest's specific topic
-        stompClient.subscribe(`/topic/contest/${contestId}/judge`, (message) => {
-            const event = JSON.parse(message.body);
-            handleIncomingEvent(event);
-        });
-    }, (error) => {
-        console.log("WS Error:", error);
-    });
-
-    // Cleanup on unmount
-    return () => {
-        if (stompClient && stompClient.connected) {
-            stompClient.disconnect();
-        }
-    };
+    return () => { if (client?.connected) client.disconnect(); };
   }, [contestId]);
 
   const handleIncomingEvent = (event) => {
-
     if (event.type === 'CAMERA_FRAME') {
-        console.log("📷 Received frame from:", event.username, "Image length:", event.image?.length);
+      setStudents(prev => prev.map(s => s.userId == event.userId ? { ...s, image: event.image } : s));
+      return;
     }
-    
-    setStudents((prev) => {
-        // 1. Handle User Leaving (OFFLINE)
-        if (event.type === 'OFFLINE') {
-            return prev.filter(s => s.userId != event.userId);
+    setStudents(prev => {
+      if (event.type === 'OFFLINE') return prev.filter(s => s.userId != event.userId);
+      const idx = prev.findIndex(s => s.userId == event.userId);
+      const list = [...prev];
+      if (idx === -1) {
+        list.push({ userId: event.userId, name: event.username, status: 'clean', violations: event.type === 'TAB_SWITCH' ? 1 : 0, image: event.image || null });
+      } else {
+        const upd = { ...list[idx] };
+        if (event.type === 'TAB_SWITCH' || event.type === 'FULLSCREEN_EXIT') {
+          upd.violations += 1;
+          upd.status = 'suspicious';
         }
-
-        // 2. Find existing student
-        const existingIndex = prev.findIndex(s => s.userId == event.userId);
-        let newList = [...prev];
-
-        if (existingIndex === -1) {
-            // --- NEW STUDENT ---
-            newList.push({
-                userId: event.userId,
-                name: event.username,
-                status: 'Clean',
-                violations: event.type === 'TAB_SWITCH' ? 1 : 0,
-                image: event.image || null 
-            });
-        } else {
-            // --- UPDATE EXISTING STUDENT ---
-            // FIX: We must create a NEW object for React to detect the change and re-render the image
-            const updatedStudent = { ...newList[existingIndex] };
-
-            if (event.type === 'TAB_SWITCH') {
-                updatedStudent.violations += 1;
-                updatedStudent.status = 'Suspicious'; 
-            }
-            
-            if (event.type === 'FULLSCREEN_EXIT') {
-                updatedStudent.violations += 1;
-                updatedStudent.status = 'Suspicious';
-            }
-
-            if (event.type === 'CAMERA_FRAME') {
-                setStudents((prev) => 
-                    prev.map(s => s.userId == event.userId 
-                        ? { ...s, image: event.image } // Only update the image
-                        : s
-                    )
-                );
-            }
-
-            newList[existingIndex] = updatedStudent;
-        }
-        return newList;
+        list[idx] = upd;
+      }
+      return list;
     });
   };
 
   const handleContextMenu = (e, studentId) => {
-    e.preventDefault(); 
+    e.preventDefault();
     setMenuPos({ x: e.pageX, y: e.pageY, visible: true, studentId });
   };
 
-  // --- NEW: Handle Sending Actions ---
   const handleAction = (actionType) => {
     if (stompClientRef.current && menuPos.studentId) {
-        const payload = {
-            type: actionType, // 'WARN' or 'SUSPEND'
-            targetUserId: menuPos.studentId
-        };
-        try {
-            // Send to the new backend endpoint we added
-            stompClientRef.current.send(`/app/contest/${contestId}/judge-action`, {}, JSON.stringify(payload));
-            alert(`Action ${actionType} sent.`);
-        } catch (e) {
-            console.error("Failed to send action", e);
-        }
+      try {
+        stompClientRef.current.send(`/app/contest/${contestId}/judge-action`, {}, JSON.stringify({ type: actionType, targetUserId: menuPos.studentId }));
+      } catch {}
     }
     setMenuPos({ ...menuPos, visible: false });
   };
 
   useEffect(() => {
-    const handleClick = () => setMenuPos({ ...menuPos, visible: false });
-    document.addEventListener('click', handleClick);
-    return () => document.removeEventListener('click', handleClick);
-  }, [menuPos]);
+    const close = () => setMenuPos(m => ({ ...m, visible: false }));
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, []);
+
+  const totalViolations = students.reduce((s, st) => s + st.violations, 0);
+  const suspicious      = students.filter(s => s.status === 'suspicious').length;
 
   return (
-    <div className="judge-container">
+    <div className="judge-page">
+      {/* Header */}
       <div className="judge-header">
-        <div>
-          <h2 style={{margin: 0}}>ProctorX Judge Panel</h2>
-          <span style={{color: '#aaa', fontSize: '0.9rem'}}>{contest?.title}</span>
+        <div className="judge-brand">⚖️ ProctorX Judge Panel</div>
+        <div style={{ display:'flex', alignItems:'center', gap:8, color:'var(--text-secondary)', fontSize:'0.875rem' }}>
+          📋 {contest?.title}
         </div>
-        <div className="live-badge">● LIVE MONITORING</div>
+        <div className="live-badge">
+          <span className="live-dot" />
+          Live Monitoring
+        </div>
       </div>
 
-      <div className="monitoring-grid">
-        {students.length === 0 ? (
-            <div style={{gridColumn: '1/-1', textAlign:'center', padding:'2rem', color:'#666'}}>
-                Waiting for students to join or trigger events...
+      <div className="judge-content">
+        {/* Stats */}
+        <div className="judge-stats">
+          <div className="j-stat">
+            <div className="j-stat-label">Active Students</div>
+            <div className="j-stat-value" style={{ color:'var(--success)' }}>{students.length}</div>
+          </div>
+          <div className="j-stat">
+            <div className="j-stat-label">Suspicious</div>
+            <div className="j-stat-value" style={{ color:'var(--warning)' }}>{suspicious}</div>
+          </div>
+          <div className="j-stat">
+            <div className="j-stat-label">Total Violations</div>
+            <div className="j-stat-value" style={{ color:'var(--danger)' }}>{totalViolations}</div>
+          </div>
+          <div className="j-stat">
+            <div className="j-stat-label">Contest</div>
+            <div style={{ fontSize:'0.875rem', fontWeight:600, color:'var(--primary-light)', marginTop:4 }}>
+              #{contestId}
             </div>
-        ) : (
-            students.map((student) => (
-            <div 
-                key={student.userId} 
-                className={`student-card ${student.status.toLowerCase()}`}
-                onContextMenu={(e) => handleContextMenu(e, student.userId)}
-            >
+          </div>
+        </div>
+
+        {/* Student grid */}
+        <div className="monitoring-grid">
+          {students.length === 0 ? (
+            <div className="judge-empty">
+              <div className="icon">📷</div>
+              <h3>Waiting for students to join…</h3>
+              <p>Students' camera feeds will appear here in real time.</p>
+            </div>
+          ) : (
+            students.map(student => (
+              <div
+                key={student.userId}
+                id={`student-card-${student.userId}`}
+                className={`student-card ${student.status}`}
+                onContextMenu={e => handleContextMenu(e, student.userId)}
+              >
                 <div className="camera-feed">
-                    {student.image ? (
-                        <img 
-                            src={student.image} 
-                            alt="Live" 
-                            style={{width:'100%', height:'100%', objectFit:'cover'}} 
-                        />
-                    ) : (
-                        <span style={{color:'#666'}}>[No Video Signal]</span>
-                    )}
+                  {student.image ? (
+                    <img src={student.image} alt="Live feed" />
+                  ) : (
+                    <div className="camera-feed-placeholder">
+                      <div className="cam-icon">📷</div>
+                      <span>No Signal</span>
+                    </div>
+                  )}
                 </div>
-                
                 <div className="student-info">
-                    <span style={{fontWeight: 'bold'}}>{student.name}</span>
-                    {student.violations > 0 && (
-                        <span className="violation-count">{student.violations} Violations</span>
-                    )}
+                  <span className="student-name">{student.name}</span>
+                  {student.violations > 0 && (
+                    <span className={`violation-badge ${student.violations >= 3 ? 'high' : ''}`}>
+                      ⚠ {student.violations}
+                    </span>
+                  )}
                 </div>
-            </div>
+              </div>
             ))
-        )}
+          )}
+        </div>
       </div>
 
+      {/* Context menu */}
       {menuPos.visible && (
-        <div className="context-menu" style={{ top: menuPos.y, left: menuPos.x }}>
-            <div className="menu-item" onClick={() => handleAction('WARN')}>⚠️ Send Warning</div>
-            <div className="menu-item danger" onClick={() => handleAction('SUSPEND')}>🚫 Suspend User</div>
+        <div className="ctx-menu" style={{ top: menuPos.y, left: menuPos.x }}>
+          <div className="ctx-item warn" id="ctx-warn-btn" onClick={() => handleAction('WARN')}>⚠️ Send Warning</div>
+          <div className="ctx-divider" />
+          <div className="ctx-item danger" id="ctx-suspend-btn" onClick={() => handleAction('SUSPEND')}>🚫 Suspend Student</div>
         </div>
       )}
     </div>
