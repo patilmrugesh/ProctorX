@@ -1,0 +1,119 @@
+/* ContestQuestions.css – fresh light */
+.cq-page { min-height: 100vh; position: relative; z-index: 1; }
+
+.cq-toolbar {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  border-bottom: 1px solid rgba(79, 70, 229, 0.08);
+  padding: 0 28px;
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 16px; min-height: 62px; flex-wrap: wrap;
+  box-shadow: 0 1px 6px rgba(79, 70, 229, 0.04);
+}
+.cq-toolbar-left  { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.cq-toolbar-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cq-title {
+  font-size: 1.05rem; font-weight: 800;
+  background: var(--grad-hero);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+
+.cq-content { max-width: 1100px; margin: 0 auto; padding: 28px; animation: fadeUp 0.4s var(--ease-expo) both; }
+
+/* Tabs */
+.cq-tabs {
+  display: flex; gap: 4px; margin-bottom: 24px;
+  background: rgba(79, 70, 229, 0.04);
+  border: 1px solid rgba(79, 70, 229, 0.10);
+  border-radius: 12px; padding: 5px; width: fit-content;
+}
+.cq-tab {
+  padding: 9px 22px; border-radius: 9px;
+  font-size: 0.85rem; font-weight: 700; cursor: pointer;
+  border: none; background: transparent; color: var(--text-3);
+  transition: all 0.2s; font-family: inherit;
+}
+.cq-tab.active { background: var(--grad-hero); color: #fff; box-shadow: 0 4px 16px rgba(79, 70, 229, 0.30); }
+.cq-tab:not(.active):hover { color: var(--text-2); background: rgba(79, 70, 229, 0.06); }
+
+/* Question list */
+.q-list {
+  background: rgba(255, 255, 255, 0.90);
+  border: 1px solid rgba(79, 70, 229, 0.08);
+  border-radius: 20px; overflow: hidden;
+  backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-sm);
+}
+.q-list-header {
+  display: flex; align-items: center; gap: 12px; padding: 12px 18px;
+  background: rgba(79, 70, 229, 0.03);
+  border-bottom: 1px solid rgba(79, 70, 229, 0.08);
+  font-size: 0.78rem; font-weight: 700; color: var(--text-3);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.q-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 18px; border-bottom: 1px solid rgba(79, 70, 229, 0.05);
+  gap: 14px; transition: background 0.15s;
+}
+.q-item:last-child { border-bottom: none; }
+.q-item:hover { background: rgba(79, 70, 229, 0.04); }
+.q-item-left { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+.q-item-title { font-size: 0.875rem; font-weight: 700; color: var(--text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.q-item-meta  { font-size: 0.75rem; color: var(--text-3); white-space: nowrap; }
+.q-item-actions { display: flex; gap: 8px; flex-shrink: 0; }
+.q-action-btn {
+  padding: 6px 13px; border-radius: 8px;
+  font-size: 0.76rem; font-weight: 700;
+  cursor: pointer; border: 1px solid transparent;
+  font-family: inherit; transition: all 0.18s;
+}
+
+/* Add form card */
+.add-form-card {
+  background: rgba(255, 255, 255, 0.90);
+  border: 1px solid rgba(79, 70, 229, 0.08);
+  border-radius: 22px; padding: 30px;
+  backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-sm);
+}
+.add-form-card h3 { font-size: 1.1rem; font-weight: 800; color: var(--text-1); margin-bottom: 22px; }
+.form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+.q-empty { padding: 60px 24px; text-align: center; color: var(--text-3); }
+.q-empty .icon { font-size: 2.8rem; opacity: 0.25; margin-bottom: 12px; }
+
+/* Test case modal */
+.tc-modal-backdrop {
+  position: fixed; inset: 0; background: rgba(30, 27, 75, 0.20); backdrop-filter: blur(8px);
+  z-index: 500; display: flex; align-items: center; justify-content: center; padding: 24px;
+}
+.tc-modal {
+  width: 100%; max-width: 580px; max-height: 80vh;
+  background: #fff;
+  border: 1px solid rgba(79, 70, 229, 0.12);
+  border-radius: 22px; display: flex; flex-direction: column;
+  box-shadow: 0 30px 80px rgba(79, 70, 229, 0.15); overflow: hidden;
+  animation: fadeUp 0.3s var(--ease-expo) both;
+}
+.tc-modal-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 20px 24px; border-bottom: 1px solid rgba(79, 70, 229, 0.08); flex-shrink: 0;
+}
+.tc-modal-head h3 { font-size: 1rem; font-weight: 800; color: var(--text-1); }
+.tc-modal-body { flex:1; overflow-y:auto; padding:20px 24px; display:flex; flex-direction:column; gap:16px; }
+
+.tc-list { display:flex; flex-direction:column; gap:8px; }
+.tc-row {
+  background: rgba(79, 70, 229, 0.03); border:1px solid rgba(79, 70, 229, 0.08); border-radius:10px;
+  padding:12px 14px; font-size:0.8rem; font-family:'JetBrains Mono',monospace;
+  color:var(--text-2); display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+}
+.tc-row-content { flex:1; line-height:1.7; }
+.qf-banner {
+  background: rgba(8, 145, 178, 0.06); border:1px solid rgba(8, 145, 178, 0.18);
+  border-radius:10px; padding:10px 16px;
+  font-size:0.82rem; color:#0891B2;
+  display:flex; align-items:center; gap:10px; margin-bottom:16px;
+}

@@ -1,0 +1,140 @@
+/* StudentDashboard.css – fresh light */
+.student-page { min-height: 100vh; position: relative; z-index: 1; }
+
+.student-content {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 40px 28px;
+  animation: fadeUp 0.4s var(--ease-expo) both;
+}
+
+/* Welcome hero */
+.welcome-hero {
+  border-radius: 24px;
+  padding: 36px 40px;
+  margin-bottom: 28px;
+  background: linear-gradient(135deg, rgba(79, 70, 229, 0.08) 0%, rgba(192, 38, 211, 0.06) 50%, rgba(8, 145, 178, 0.05) 100%);
+  border: 1px solid rgba(79, 70, 229, 0.15);
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+.welcome-hero::before {
+  content: '🎓';
+  position: absolute;
+  right: 32px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 6rem;
+  opacity: 0.06;
+}
+.welcome-hero h1 {
+  font-size: 1.85rem;
+  font-weight: 900;
+  background: var(--grad-hero);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 6px;
+}
+.welcome-hero p { font-size: 0.9rem; color: var(--text-2); }
+
+/* Join card */
+.join-card {
+  background: rgba(255, 255, 255, 0.90);
+  border: 1px solid rgba(79, 70, 229, 0.08);
+  border-radius: 22px;
+  padding: 32px;
+  backdrop-filter: blur(16px);
+  margin-bottom: 24px;
+  box-shadow: var(--shadow-sm);
+}
+.join-card h2 { font-size: 1.2rem; font-weight: 800; color: var(--text-1); margin-bottom: 6px; }
+.join-card .hint { font-size: 0.875rem; color: var(--text-2); margin-bottom: 22px; }
+
+.token-input-row { display: flex; gap: 12px; }
+
+.token-input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid rgba(79, 70, 229, 0.12);
+  border-radius: 14px;
+  color: var(--text-1);
+  padding: 16px 22px;
+  font-size: 1.5rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 800;
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  outline: none;
+  text-align: center;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.token-input:focus {
+  border-color: var(--primary-light);
+  box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.10), 0 0 25px rgba(79, 70, 229, 0.08);
+}
+.token-input::placeholder { color: var(--text-3); font-size: 0.9rem; letter-spacing: 0.05em; }
+
+/* Contest reveal */
+.contest-reveal {
+  margin-top: 24px;
+  background: rgba(5, 150, 105, 0.04);
+  border: 1px solid rgba(5, 150, 105, 0.18);
+  border-radius: 18px;
+  padding: 26px;
+  animation: fadeUp 0.35s ease both;
+}
+.contest-reveal h3 { font-size: 1.2rem; font-weight: 800; color: var(--text-1); margin-bottom: 16px; }
+.contest-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 14px;
+  margin-bottom: 18px;
+}
+.contest-meta-item label {
+  font-size: 0.7rem; color: var(--text-3); text-transform: uppercase;
+  letter-spacing: 0.08em; font-weight: 700; display: block; margin-bottom: 5px;
+}
+.contest-meta-item p { font-size: 0.9rem; font-weight: 700; color: var(--text-1); }
+
+.warning-notice {
+  background: rgba(217, 119, 6, 0.06);
+  border: 1px solid rgba(217, 119, 6, 0.18);
+  border-radius: 10px;
+  padding: 12px 16px;
+  font-size: 0.845rem;
+  color: #B45309;
+  margin-bottom: 18px;
+}
+
+/* Judge card */
+.judge-card {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(79, 70, 229, 0.08);
+  border-radius: 18px;
+  padding: 24px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  backdrop-filter: blur(16px);
+  box-shadow: var(--shadow-sm);
+}
+.judge-icon { font-size: 2.2rem; }
+.judge-card-text h4 { font-size: 0.95rem; font-weight: 800; color: var(--text-1); margin-bottom: 3px; }
+.judge-card-text p  { font-size: 0.82rem; color: var(--text-2); }
+.judge-inputs { display: flex; gap: 10px; align-items: center; flex: 1; min-width: 260px; }
+.judge-token-input {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.8);
+  border: 1.5px solid rgba(79, 70, 229, 0.12);
+  border-radius: 10px;
+  color: var(--text-1);
+  padding: 11px 16px;
+  font-size: 0.9rem;
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.judge-token-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(8, 145, 178, 0.10); }
