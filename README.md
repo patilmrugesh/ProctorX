@@ -1,10 +1,10 @@
-# ProctorrX — Online Assessment & Coding Platform
+# ProctorX — Online Assessment & Coding Platform
 
-**ProctorrX** is a full-stack online assessment platform designed to support secure examinations, coding assessments, and test management. It brings the frontend and backend into a single monorepository, making development, maintenance, and collaboration easier.
+**ProctorX** is a full-stack online assessment platform designed to support secure examinations, coding assessments, and test management. It brings the frontend and backend into a single monorepository, making development, maintenance, and collaboration easier.
 
 The platform combines assessment management, student and administrator interfaces, coding workflows, and AI-assisted capabilities in one application.
 
-**Repository:** [patilmrugesh/ProctorrX](https://github.com/patilmrugesh/ProctorrX)
+**Repository:** [patilmrugesh/ProctorX](https://github.com/patilmrugesh/ProctorX)
 
 ---
 
@@ -28,7 +28,7 @@ The platform combines assessment management, student and administrator interface
 
 Online assessments need more than a question-and-answer interface. They require reliable assessment management, controlled exam sessions, code evaluation, and tools that help administrators monitor and manage the examination process.
 
-ProctorrX aims to bring these capabilities together through a full-stack application with a React-based frontend and a Spring Boot backend.
+ProctorX aims to bring these capabilities together through a full-stack application with a React-based frontend and a Spring Boot backend.
 
 The project is organized as a monorepo, keeping the frontend and backend in one repository while maintaining their separate development workflows.
 
@@ -63,7 +63,7 @@ The project is organized as a monorepo, keeping the frontend and backend in one 
 - Maven-based backend dependency management.
 - A unified repository for easier development and maintenance.
 
-> Feature availability depends on the current implementation and configuration of the respective modules.
+> Feature availability depends on the curent implementation and configuration of the respective modules.
 
 ## Technology Stack
 
@@ -80,7 +80,7 @@ The project is organized as a monorepo, keeping the frontend and backend in one 
 
 ## Architecture
 
-ProctorrX follows a client-server architecture.
+ProctorX follows a client-server architecture.
 
 ```text
                  ┌────────────────────────┐
@@ -117,7 +117,7 @@ ProctorrX follows a client-server architecture.
 ## Project Structure
 
 ```text
-ProctorrX/
+ProctorX/
 ├── backend/
 │   └── backend/
 │       ├── src/
@@ -152,13 +152,13 @@ Install the following tools before running the project:
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/patilmrugesh/ProctorrX.git
-cd ProctorrX
+git clone https://github.com/patilmrugesh/ProctorX.git
+cd ProctorX
 ```
 
 ### 2. Configure PostgreSQL
 
-Create a PostgreSQL database for the application. The current backend configuration uses the database name `proctorx_db` and the default PostgreSQL port `5432`.
+Create a PostgreSQL database for the application. The curent backend configuration uses the database name `proctorx_db` and the default PostgreSQL port `5432`.
 
 For example:
 
@@ -211,9 +211,9 @@ Alternatively, if Maven is installed:
 mvn spring-boot:run
 ```
 
-The backend is configured to use port `8080` unless overridden by application configuration.
+The backend is configured to use port `8080` unless overidden by application configuration.
 
-**Note:** The frontend and backend must be configured to communicate with the correct local API address.
+**Note:** The frontend and backend must be configured to communicate with the corect local API address.
 
 ## Environment Configuration
 
@@ -303,7 +303,7 @@ Contributions, bug reports, and suggestions are welcome.
 **Mrugesh Patil**
 
 - GitHub: [@patilmrugesh](https://github.com/patilmrugesh)
-- Project Repository: [ProctorrX](https://github.com/patilmrugesh/ProctorrX)
+- Project Repository: [ProctorX](https://github.com/patilmrugesh/ProctorX)
 
 ---
 
